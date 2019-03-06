@@ -1,10 +1,11 @@
 {
-  "name": "chatter",
+  "name": "chatter-webex",
   "version": "0.0.1",
-  "description": "real-time chat app with GIFs support",
+  "description": "a chat app using webex teams and webex sdk",
   "dependencies": {
     "axios": "^0.18.0",
     "bootstrap": "^4.1.1",
+    "ciscospark": "^1.49.3",
     "express": "^4.15.2",
     "font-awesome": "^4.7.0",
     "jquery": "^3.3.1",
