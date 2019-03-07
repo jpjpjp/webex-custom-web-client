@@ -6,33 +6,50 @@ import socketIOClient from 'socket.io-client';
 import { init as initTeams } from 'ciscospark';
 import { AssertionError } from 'assert';
 
-// Create the object for processing Events
+// Create the object for generating client side events
 var EventPump = require('./eventPump.js');
+// Create an object for sending and getting read receipts
+var ReadInfo = require('./readInfo.js');
 
 
+// This class implements the main chat GUI and interfaces with webex
 class Chat extends React.Component {
 
   constructor(props) {
     super(props);
-    this.socket = null;
+
+    // Toggle between internal socket and webhook server modes
+    let internalSocket = true;
+
+    // These elements are used in both modes
     this.state = {
-      internalSocket: true,  // toggle between modes
-      eventPump: null,       // is used to get events from internal SDK interfaces
-//      username: localStorage.getItem('username') ? localStorage.getItem('username') : '',
-      username: '',  // force login every page refresh
-      uid: localStorage.getItem('uid') ? localStorage.getItem('uid') : this.generateUID(),
+      // GUI Elements
+      username: '',  
       chat_ready: false,
       lookingState: 'looking',  // Used for new activity marker, can also be 'away', or 'back'
       newMessagesIndex: -1,     // Index in message array where New Messages notification is
       users: [],                // For membership display
       usersById: [],            // Shortcut to get user name from membership.personId
+      lastReadById: [],         // Keep track of the last read message by user
       messages: [],             // Local copy of messages
-      message: '',
-      // These elements are used to leverage a Webex Teams backed meeting
+      lastMsgId: '',            // ID of the last message sent
+
+      // These elements are used to leverage a Webex Teams backed chat session
       teams: null,              // Teams SDK will go here
       user: null,               // The Teams User object
       roomId: ''                // Webex Teams Space that will power this chat
     }
+
+    if (internalSocket) {
+      this.state.internalSocket = true;  // SDK events generates callbacks
+      this.state.eventPump = {}         // generate events from internal SDK interfaces  
+      this.state.readInfo = {}          // talk to internal interfaces for read receipts
+    } else {
+      this.state.internalSocket = true;  // webhook server generates callbacks
+      this.socket = null;       
+      this.state.uid = localStorage.getItem('uid') ? localStorage.getItem('uid') : this.generateUID();
+    }
+
     // hacks to test the SDK, this would normaly be in permanent storage
     // Associate user names with their token
     localStorage.setItem('jpbulk', 'MjI4YTgwZjAtZGQ1MS00MTRjLWIxNDEtZTdkZDkyMTdkZjFhMWM1MjZiMmUtNTI5')
@@ -42,29 +59,42 @@ class Chat extends React.Component {
 
   }
 
-  componentDidMount() {
-    if (this.state.username.length) {
-      this.initChat();
-    }
-  }
+  // I think I can comment this out and force a "login" every time
+  // componentDidMount() {
+  //   if (this.state.username.length) {
+  //     this.initChat();
+  //   }
+  // }
 
-  generateUID() {
-    let text = '';
-    let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 15; i++) {
-      text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    localStorage.setItem('uid', text);
-    return text;
-  }
+  // Its not clear we need this UUID thing when webex powers our chat
+  // generateUID() {
+  //   let text = '';
+  //   let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  //   for (let i = 0; i < 15; i++) {
+  //     text += possible.charAt(Math.floor(Math.random() * possible.length));
+  //   }
+  //   localStorage.setItem('uid', text);
+  //   return text;
+  // }
 
-  setUsername(username, e) {
-    // THis is getting repurposed to set up a Webex User and a space
-    // might rename setupWebexUser
-    let token = localStorage.getItem(username);
+  /**
+   * Once a user has "logged in" by choosing one of a preset list of webex user
+   * register that user with the Webex SDK and load the predefined space to start in
+   * 
+   * For demo purposes we use a canned set of users and their dev tokens
+   * A real app would have a proper login and auth flow
+   * 
+   * We also "pre-select" the starting room.  As this app matures it may 
+   * implement a list of rooms and let the user select
+   *
+   * @function setUserKey
+   * @param {object} userInfo - object with token and roomId for the user
+   */
+  setUserKey(userInfo) {
+    let token = userInfo.token;
+    let roomId = userInfo.roomId
     if (token) {
-      // The user is a webex user
-      // Initialize the SDK and make it available to the window
+      // Initialize the SDK for this user
       let teams = (window.webexteams = initTeams({
         credentials: {
           access_token: token
@@ -72,50 +102,46 @@ class Chat extends React.Component {
       }));
 
       if (teams) {
-        // I may want to do this AFTER I've set everything up
+        // Initialize our event pump with the methods to call for each event type
+        // TODO consider if this should happen AFTER we query
+        // for the room membership and message details
+        // A real app must consider that events that occur while 
+        // we are doing the initial webex space setup may show up twice:
+        // once in our event queue, and again when we poll for space info
+        let eventPump = {};
         if (this.state.internalSocket) {
-          let eventPump = new EventPump(teams, 
+          eventPump = new EventPump(teams, 
             this.messageCreated.bind(this),
             this.messageDeleted.bind(this),
             this.membershipCreated.bind(this),
-            this.membershipDeleted.bind(this));
+            this.membershipDeleted.bind(this),
+            this.readReceipt.bind(this));
         }
 
+        let readInfo = new ReadInfo(token);
+
         let username = '';
-        let roomId = '';
         let user = null;
         let users = [];
         let usersById = [];
         let messages = [];
-        let userAddedToSpace = false;
-        // SDK Initialized lets get the user info and store it
+        let lastReadById = [];
+        let lastMsgId = '';
+        // Get the webex person details for this user
         teams.people.get('me').then((userObj) => {
           user = userObj;
           user.displayName ? username = user.displayName : username = user.firstName + ' '+ user.lasName;
-          roomId = localStorage.getItem(user.id);
 
           // Now lets get the space membership info
           return teams.memberships.list({roomId: roomId});
         }).then((memberships) => {
+          // Keep a local cache of members for display purposes
           for (let i=0; i<memberships.items.length; i++) {
             let member = memberships.items[i]; 
+            // Message events have the sender ID but not name
+            // Map ID to Name locally to avoid multiple SDK queries
             usersById[member.personId] = member.personDisplayName;
             users = users.concat([member.personDisplayName]);
-          }
-          let isMe = memberships.items.find(m => m.personId === user.id);
-          if (!isMe) {
-            userAddedToSpace = true;
-            return teams.memberships.create({
-              personId: this.state.user.id,
-              roomId: roomId
-            });
-          } else {
-            return Promise.resolve(isMe);
-          }
-        }).then((myMembership) => {
-          if (userAddedToSpace) {
-            usersById[myMembership.personId] = myMembership.personDisplayName;
-            users = users.concat([myMembership.personDisplayName]);
           }
           // Now lets get the messages
           return teams.messages.list({
@@ -123,24 +149,43 @@ class Chat extends React.Component {
             max: 20
           });
         }).then((messageList) => {
+          // Put the messages in our local store from oldest to newest
           for (let i=messageList.items.length-1; i>=0; i--) {
             let msg = messageList.items[i]; 
+            // Store the username and the message text locally for fast rendering
+            // TODO, what is type for and why the hierarcy?
             messages =messages.concat([{
-              username: usersById[msg.personId],    // This will not work if the author has left the space, 
-                                                   // better would be to check for that case and query the id via /people
-              uid: 12345,         // Maybe don't need this anymore
+              username: usersById[msg.personId],    
+                  // This will not work if the author has left the space, 
+                  // better would be to check for that case and query the id via /people
+              //uid: 12345,         // Maybe don't need this anymore?
               message: {
                 type: 'message',
                 text: msg.html ? msg.html : msg.text
               }
             }]);
           }
+          // We will check the last message id when we
+          // process or generate read receipts  
+          lastMsgId = messageList.items[0].id;
+
+          // We keep track of the last read message by each user
+          // TODO figure out how to query this from conversataions for other users
+          // If our user has an older last read we should generate a read receipt here
+          lastReadById[user.id] = lastMsgId;
+
+          
+          // OK, we have everything we need to display the space, force a render
           return this.setState({
+            eventPump: eventPump,
+            readInfo: readInfo,
             user: user,
             username: username,
             users: users,
             usersById: usersById,
             messages: messages,
+            lastReadById: lastReadById,
+            lastMsgId: lastMsgId,
             roomId: roomId,
             teams: teams
           });
@@ -156,11 +201,18 @@ class Chat extends React.Component {
     }
   }
 
+/**
+   * After we have set up for a user, move to "chat mode"
+   * This means changing the render from login mode to chat
+   * If working with a seperate server, open socket connections
+   *
+   * @function initChat
+   */
   initChat() {
     // Not sure if I need this...
-    localStorage.setItem('username', this.state.username);
+    //localStorage.setItem('username', this.state.username);
     this.setState({
-      chat_ready: true,
+      chat_ready: true,   // changes render from login mode to chat mode
     });
 
     if (!this.state.internalSocket) {
@@ -187,20 +239,19 @@ class Chat extends React.Component {
     }
   }
 
+  // TODO -- see if these can be distributed more efficiently
+  // ie: membership related functions in the Users class
+  // message functions in the Messages class, etc
 
-  removeNewMessageIndicator(e) {
-    if ((this.state.newMessagesIndex > -1) &&
-      (this.state.newMessagesIndex < this.state.messages.length)) {
-      this.state.messages.splice(this.state.newMessagesIndex, 1);
-      this.setState({
-        lookingState: 'looking',
-        newMessagesIndex: -1
-      });
-    }
-  }
-
-  sendMessage(message, e) {
+/**
+   * Process a message that was typed in by our user
+   *
+   * @function sendMessage
+   * @param {string} message - message text
+   */
+  sendMessage(message, ) {
     console.log(message);
+    // TODO encapsulate this in the read reciept logic better
     if (this.state.lookingState === 'back') {
       // This is the first new message since coming back
       // remove the New Messages notification if we have one
@@ -218,25 +269,34 @@ class Chat extends React.Component {
     this.scrollToBottom();
   }
 
+/**
+ * Process a message that was created by any user in our spaces
+ *
+ * @function messageCreated
+ * @param {string} msgId - id of new message
+ * @param {string} roomId - id of the space the message is in 
+ */
   messageCreated(msgId, roomId) {
     if (roomId != this.state.roomId) {
+      //TODO
       console.log(
         'Ignoring message event for a room other than the current one.\n'+
         'This type of event could be used to mark spaces as having new unread messages.'
       );
       return;
     }
-    // If not update the read/unread on the space instead
+    // Get the message contents and update our local message store
     this.state.teams.messages.get(msgId).then((msg) => {
       return this.setState({
         messages: this.state.messages.concat([{
           username: this.state.usersById[msg.personId],
-          uid: 12345,  // Need to figure out if I still need this
+          //uid: 12345,  // Need to figure out if I still need this
           message: {
             type: 'message',
             text: msg.html ? msg.html : msg.text
-          }
-        }])
+          },
+        }]),
+        lastMsgId: msg.id
       });
     }).then(() => this.scrollToBottom())
     .catch((e) => {
@@ -244,14 +304,28 @@ class Chat extends React.Component {
     });
   }
 
-  messageDeleted(msgId, roomId) {
+/**
+ * Process a message that was deleted
+ * Not all custom clients will support this
+ *
+ * @function messageDeleted
+ * @param {object} message - message object
+ */
+  messageDeleted(message) {
     // TODO
     // Implement logic to update the GUI when a message is deleted
   }
 
+/**
+  * A new user is in the space update our user store
+  *
+  * @function membershipCreated
+  * @param {object} membership - membership object 
+  */
   membershipCreated(membership) {
     try {
       if (membership.roomId != this.state.roomId) {
+        // TODO
         console.log(
           'Ignoring membership event for a room other than the current one.\n'+
           'This type of event could be used to mark spaces as having new activity.'
@@ -269,6 +343,12 @@ class Chat extends React.Component {
     }
   }
 
+/**
+  * A user was removed from the space update our user store
+  *
+  * @function membershipDeleted
+  * @param {object} membership - membership object 
+  */
   membershipDeleted(membership) {
     try {
       if (membership.roomId != this.state.roomId) {
@@ -290,6 +370,45 @@ class Chat extends React.Component {
       alert('Got notified of a deleted membership, but could not it: '+e.message);
     }
   }
+
+/**
+  * A user has read messages
+  *
+  * @function readReceipt
+  * @param {object} readReceipt - read receipt object 
+  */
+ readReceipt(readReceipt) {
+  try {
+    if (readReceipt.roomId != this.state.roomId) {
+      console.log(
+        'Ignoring readReceipt event for a room other than the current one.\n'+
+        'If the client is caching this type of info it could do something with this.'
+      );
+      return;
+    }
+    // Update our "who read what last" state
+    this.state.lastReadById[readReceipt.personId] = readReceipt.messageId;
+    // If this is our own read receipt we arae done
+    if (readReceipt.personId !== this.state.user.id) {
+      // TODO -- do I need this anymore, maybe just updating the state is enough
+      if (readReceipt.messageId === this.state.lastMsgId) {
+        alert('All messages read by '+this.state.usersById[readReceipt.personId]);
+        // NOTE, possible race condition in usersById lookup
+        // if read receipt arrived after membership was deleted
+      } else {
+        console.log('Ignoring read receipt from %s, as its not for the last message',
+          this.state.usersById[readReceipt.personId]);
+      }
+    } else {
+      console.log('Ignoring our own read receipt event...')
+    }
+  } catch(e) {
+    alert('Got notified of a read receipt, but could not process it: '+e.message);
+  }
+}
+
+// The following methods implement and  extremely crude
+  // logic for read receipts in our client
 
   // React to a "Im not looking" action
   goneAway(e) {
@@ -347,6 +466,18 @@ class Chat extends React.Component {
     // In this state we will show the new messages marker
     // if any messages came in while we were away
     this.setState({ lookingState: 'back' });
+
+    // Notify other clients that we are caught up
+    // unless no new messages have arrived since we left
+    if (this.state.lastReadById[this.state.user.id] != 
+        this.state.lastMsgId) 
+    {
+      this.state.readInfo.sendReadReciept(
+        this.state.user.id,
+        this.state.lastMsgId,
+        this.state.roomId
+      );
+    }
     // Todo Add a new socket event to notify other clients
     // this.socket.emit('message', {
     //   username: localStorage.getItem('username'),
@@ -355,6 +486,18 @@ class Chat extends React.Component {
     // });
     this.scrollToBottom();
   }
+
+  removeNewMessageIndicator(e) {
+    if ((this.state.newMessagesIndex > -1) &&
+      (this.state.newMessagesIndex < this.state.messages.length)) {
+      this.state.messages.splice(this.state.newMessagesIndex, 1);
+      this.setState({
+        lookingState: 'looking',
+        newMessagesIndex: -1
+      });
+    }
+  }
+
 
   scrollToBottom() {
     let messages = document.getElementsByClassName('messages')[0];
@@ -378,7 +521,7 @@ class Chat extends React.Component {
           </React.Fragment>
         ) : (
             <EnterChat
-              setUsername={this.setUsername.bind(this)}
+              setUserKey={this.setUserKey.bind(this)}
             />
           )}
       </div>
