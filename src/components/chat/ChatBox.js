@@ -48,21 +48,15 @@ class ChatBox extends React.Component {
             ) : ('Start Looking')}
           </button>
         </div>
-          {this.props.lookingState != 'away' ? (
-            <input
-              className="form-control"
-              placeholder="Type message"
-              value={this.state.message}
-              onChange={this.onChange.bind(this)}
-              onKeyUp={this.onKeyUp.bind(this)}
-            />
-          ) : (
-            <input
-              className="form-control"
-              placeholder="Ignoring Input While Not Looking"
-              disabled
-            />
-          )}
+          <input
+            className="form-control"
+            placeholder={this.props.lookingState !== 'away' ? 
+                        "Type message" : "Ignoring Input While Not Looking"}
+            value={this.state.message}
+            onChange={this.onChange.bind(this)}
+            onKeyUp={this.onKeyUp.bind(this)}
+            disabled={this.props.lookingState !== 'away' ? false : true}
+          />
       </div>
     );
   }
