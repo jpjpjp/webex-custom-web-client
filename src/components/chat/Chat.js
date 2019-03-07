@@ -60,11 +60,14 @@ class Chat extends React.Component {
   }
 
   // I think I can comment this out and force a "login" every time
-  // componentDidMount() {
-  //   if (this.state.username.length) {
-  //     this.initChat();
-  //   }
-  // }
+  // Hack to skip login during debugging
+
+  componentDidMount() {
+    this.setUserKey({
+      roomId: "Y2lzY29zcGFyazovL3VzL1JPT00vODE5MDMwZjAtNDA1MS0xMWU5LTkxMWUtZjE3YzMyNTVjZTlh",
+      token: "ZWNiN2YxZDYtMGZhNS00M2VkLThmMWUtNmE5OGYyMTA4Y2Q4OTlkOTM5NjItNjVm_PF84_ce861fba-6e2f-49f9-9a84-b354008fac9e"
+    });
+  }
 
   // Its not clear we need this UUID thing when webex powers our chat
   // generateUID() {
@@ -111,11 +114,8 @@ class Chat extends React.Component {
         let eventPump = {};
         if (this.state.internalSocket) {
           eventPump = new EventPump(teams, 
-            this.messageCreated.bind(this),
-            this.messageDeleted.bind(this),
-            this.membershipCreated.bind(this),
-            this.membershipDeleted.bind(this),
-            this.readReceipt.bind(this));
+            this.processMessageEvent.bind(this),
+            this.processMembershipEvent.bind(this));
         }
 
         let readInfo = new ReadInfo(token);
@@ -269,6 +269,47 @@ class Chat extends React.Component {
     this.scrollToBottom();
   }
 
+processMessageEvent(message) {
+  try {
+    switch(message.lastActivity) {
+      case('created'):
+        this.messageCreated(message.id, message.roomId);
+        break
+      case('deleted'):
+        this.messageDeleted(message);
+        break
+      default:
+        alert('Got unexpected message event activity: '+message.lastActivity);
+    }
+
+  } catch(e) {
+    alert('Got notified of a message event, but cannot get it: '+e.message);
+  };
+}
+
+processMembershipEvent(membership) {
+  try {
+    switch(membership.lastActivity) {
+      case('created'):
+        this.membershipCreated(membership);
+        break
+      case('deleted'):
+        this.membershipDeleted(membership);
+        break
+      case('read'):
+        this.readReceipt(membership);
+        break
+      default:
+        alert('Got unexpected membership event activity: '+membership.lastActivity);
+    }
+
+  } catch(e) {
+    alert('Got notified of a membership event, but cannot get it: '+e.message);
+  };
+}
+
+
+
 /**
  * Process a message that was created by any user in our spaces
  *
@@ -287,6 +328,12 @@ class Chat extends React.Component {
     }
     // Get the message contents and update our local message store
     this.state.teams.messages.get(msgId).then((msg) => {
+      // If we are looking lets mark this message as read
+      if (this.state.lookingState == 'looking') {
+        this.state.lastReadById[this.state.user.id] = msg.id;
+      }
+      // We also mark the sender as read
+      this.state.lastReadById[msg.personId] = msg.id;
       return this.setState({
         messages: this.state.messages.concat([{
           username: this.state.usersById[msg.personId],
@@ -296,7 +343,8 @@ class Chat extends React.Component {
             text: msg.html ? msg.html : msg.text
           },
         }]),
-        lastMsgId: msg.id
+        lastMsgId: msg.id,
+        lastReadById: this.state.lastReadById
       });
     }).then(() => this.scrollToBottom())
     .catch((e) => {
@@ -313,7 +361,8 @@ class Chat extends React.Component {
  */
   messageDeleted(message) {
     // TODO
-    // Implement logic to update the GUI when a message is deleted
+    alert('A messages was delete by '+this.state.usersById[message.personId]+
+      '\nHave not implemented client side GUI to deal with this');
   }
 
 /**
@@ -333,10 +382,12 @@ class Chat extends React.Component {
         return;
       }
       // Update the membership list
-      this.state.usersById[membership.personId] = membership.personDisplayName
+      this.state.usersById[membership.personId] = membership.personDisplayName;
+      this.state.lastReadById[membership.personId] = '';
       this.setState({
           users: this.state.users.concat(membership.personDisplayName),
-          usersById: this.state.usersById
+          usersById: this.state.usersById,
+          lastReadById: this.state.lastReadById
       });
     } catch(e) {
       alert('Got notified of a new membership, but cannot get it: '+e.message);
@@ -358,8 +409,9 @@ class Chat extends React.Component {
         );
         return;
       }
-      // Update the membership list
-      delete this.state.usersById[membership.personId];
+      // Update the membership list and membership info
+      if (membership.personId in this.state.usersById) delete this.state.usersById[membership.personId];
+      if (membership.personId in this.state.lastReadById) delete this.state.lastReadById[membership.personId];
       let index = this.state.users.indexOf(membership.personDisplayName);
       if (index !== -1) this.state.users.splice(index, 1);
       this.setState({
@@ -375,29 +427,31 @@ class Chat extends React.Component {
   * A user has read messages
   *
   * @function readReceipt
-  * @param {object} readReceipt - read receipt object 
+  * @param {object} membership - membership with lastActivity == read
   */
- readReceipt(readReceipt) {
+ readReceipt(membership) {
   try {
-    if (readReceipt.roomId != this.state.roomId) {
+    if (membership.roomId != this.state.roomId) {
       console.log(
         'Ignoring readReceipt event for a room other than the current one.\n'+
         'If the client is caching this type of info it could do something with this.'
       );
       return;
     }
-    // Update our "who read what last" state
-    this.state.lastReadById[readReceipt.personId] = readReceipt.messageId;
-    // If this is our own read receipt we arae done
-    if (readReceipt.personId !== this.state.user.id) {
-      // TODO -- do I need this anymore, maybe just updating the state is enough
-      if (readReceipt.messageId === this.state.lastMsgId) {
-        alert('All messages read by '+this.state.usersById[readReceipt.personId]);
-        // NOTE, possible race condition in usersById lookup
+    if (!membership.lastReadId) {
+      alert('Got a membership event with lastActivity read, but not messageId');
+      return;
+    }
+    // If this is our own read receipt there is nothing to do.
+    if (membership.personId !== this.state.user.id) {
+      // Update Read Receipt list if this is for the last message in our list
+      if (membership.lastReadId === this.state.lastMsgId) {
+        this.state.lastReadById[membership.personId] = membership.lastReadId;
+        this.setState({lastReadById: this.state.lastReadById})
         // if read receipt arrived after membership was deleted
       } else {
         console.log('Ignoring read receipt from %s, as its not for the last message',
-          this.state.usersById[readReceipt.personId]);
+          this.state.usersById[membership.personId]);
       }
     } else {
       console.log('Ignoring our own read receipt event...')
@@ -489,11 +543,14 @@ class Chat extends React.Component {
 
   removeNewMessageIndicator(e) {
     if ((this.state.newMessagesIndex > -1) &&
-      (this.state.newMessagesIndex < this.state.messages.length)) {
+      (this.state.newMessagesIndex < this.state.messages.length)) 
+    {
+      this.state.lastReadById[this.state.user.id] =  this.state.lastMsgId;
       this.state.messages.splice(this.state.newMessagesIndex, 1);
       this.setState({
         lookingState: 'looking',
-        newMessagesIndex: -1
+        newMessagesIndex: -1,
+        lastReadById: this.state.lastReadById
       });
     }
   }
@@ -510,7 +567,17 @@ class Chat extends React.Component {
       <div className="chat">
         {this.state.chat_ready ? (
           <React.Fragment>
-            <Users users={this.state.users} />
+            {/* <Users users={this.state.users} />
+            <ReadBy 
+              usersById={this.state.usersById} 
+              lastReadById={this.state.lastReadById} 
+              lastMsgId={this.state.lastMsgId} 
+            /> */}
+            <Users users={this.state.users}
+              usersById={this.state.usersById} 
+              lastReadById={this.state.lastReadById} 
+              lastMsgId={this.state.lastMsgId} 
+            />
             <Messages
               sendMessage={this.sendMessage.bind(this)}
               goneAway={this.goneAway.bind(this)}
