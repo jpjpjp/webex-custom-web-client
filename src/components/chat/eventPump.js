@@ -4,14 +4,10 @@
 // to the public webhooks
 
 class EventPump {
-  constructor(teams, messageCreatedFn, messageDeletedFn, 
-    membershipCreatedFn, membershipDeletedFn, readReceiptFn) {
+  constructor(teams, messageEventCb, membershipEventCb) {
     try {
-      this.messageCreatedFn = messageCreatedFn;
-      this.messageDeletedFn = messageDeletedFn;
-      this.membershipCreatedFn = membershipCreatedFn;
-      this.membershipDeletedFn = membershipDeletedFn;
-      this.readReceiptFn = readReceiptFn;
+      this.messageEventCb =  (messageEventCb instanceof Function) ? messageEventCb : null;
+      this.membershipEventCb =  (membershipEventCb instanceof Function) ? membershipEventCb : null;
 
       // Register to get SDK Internal events
       teams.internal.device.register();
@@ -36,11 +32,8 @@ class EventPump {
       return;
     }
 
-    let id = '';
-    let roomId = '';
     let membership = {};
     let message = {};
-    let readReceipt = {};
     switch(event.data.activity.verb){
       case ("post"):
       case ("share"):
@@ -48,16 +41,29 @@ class EventPump {
         // Message is encrypted.  We'll just send the message ID
         // so the client can GET the full unencyrpted message object
         try {
-          id = Buffer.from(
-            'ciscospark://us/MESSAGE/'+event.data.activity.id).toString('base64').replace(/=*$/, "");
-          roomId = Buffer.from(
-            'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, "");
-          console.log('Will tell client to fetch message ID: %s from room: %s',id, roomId);
+          message = {
+            id: Buffer.from(
+              'ciscospark://us/MESSAGE/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
+            roomId: Buffer.from(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            // Not clear how to get roomType from Activity data  
+            personId: Buffer.from(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personEmail: event.data.activity.actor.emailAddress,
+            personDisplayName: event.data.activity.actor.disaplayName,
+            personOrgId: Buffer.from(
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            // Not clear how to get isModerator from Activity data
+            // Not clear how to get isMonitor from Activity data
+            // Not clear how to get isRoomHidden from Activity data
+            lastActivity: 'created',
+            lastActivityDate:  new Date(event.timestamp).toISOString()
+          };
+          console.log('Will tell client to fetch message ID: %s from room: %s',message.id, message.roomId);
         } catch(e) {
           console.log('Failed getting data from event: '+e.message);
         }
-        (this.messageCreatedFn instanceof Function) ? 
-          this.messageCreatedFn(id, roomId) : console.log('No app to send it to.');
+        (this.messageEventCb) ? this.messageEventCb(message) : console.log('No app to send it to.');
         break;
         
       case ("delete"):
@@ -69,16 +75,24 @@ class EventPump {
               'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
             roomId: Buffer.from(
               'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            // Not clear how to get roomType from Activity data  
             personId: Buffer.from(
               'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
-            personEmail: event.data.activity.actor.emailAddress
+            personEmail: event.data.activity.actor.emailAddress,
+            personDisplayName: event.data.activity.actor.disaplayName,
+            personOrgId: Buffer.from(
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            // Not clear how to get isModerator from Activity data
+            // Not clear how to get isMonitor from Activity data
+            // Not clear how to get isRoomHidden from Activity data
+            lastActivity: 'deleted',
+            lastActivityDate:  new Date(event.timestamp).toISOString() 
           };
-          console.log('Will tell client to delete message ID: %s from room: %s',id, roomId);
+          console.log('Will tell client to delete message ID: %s from room: %s',message.id, message.roomId);
         } catch(e) {
           console.log('Failed getting data from event: '+e.message);
         }
-        (this.messageDeletedFn instanceof Function) ? 
-          this.messageDeletedFn(message) : console.log('No app to send it to.');
+        (this.messageEventCb) ? this.messageEventCb(message) : console.log('No app to send it to.');
         break;
 
       case ("add"):
@@ -89,6 +103,7 @@ class EventPump {
               'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
             roomId: Buffer.from(
               'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            // roomType: not clear how to get this from activity
             personId: Buffer.from(
               'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).toString('base64').replace(/=*$/, ""),
             personEmail: event.data.activity.object.emailAddress,
@@ -97,15 +112,15 @@ class EventPump {
               'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).toString('base64').replace(/=*$/, ""),
             actorId: Buffer.from(
               'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
-            created: new Date(event.timestamp).toISOString()
+            lastActivity: 'created',
+            lastActivityDate: new Date(event.timestamp).toISOString()
           };
           console.log('Will tell client delete a userId: %s to room: %s',
             membership.personDisplayName, membership.roomId);
         } catch(e) {
           console.log('Failed getting data from event: '+e.message);
         }
-        (this.membershipCreatedFn instanceof Function) ? 
-          this.membershipCreatedFn(membership) : console.log('No app to send it to.');
+        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
         break;
         
       case ("leave"):
@@ -124,36 +139,51 @@ class EventPump {
               'ciscospark://us/PEOPLE/'+event.data.activity.object.orgId).toString('base64').replace(/=*$/, ""),
             actorId: Buffer.from(
               'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
-            deleted: new Date(event.timestamp).toISOString()
+            lastActivity: 'deleted',
+            lastActivityDate: new Date(event.timestamp).toISOString()
           };
           console.log('Will tell client delete a userId: %s from room: %s',
             membership.personDisplayName, membership.roomId);
         } catch(e) {
           console.log('Failed getting data from event: '+e.message);
         }
-        (this.membershipDeletedFn instanceof Function) ? 
-          this.membershipDeletedFn(membership) : console.log('No app to send it to.');
+        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
         break;
 
       case ("acknowledge"):
         console.log('Got an acknowledge activity');
-        readReceipt = {
+        // readReceipt = {
+        //   id: Buffer.from(
+        //     'ciscospark://us/ACTIVITY/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
+        //   roomId: Buffer.from(
+        //     'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+        //   messageId: Buffer.from(
+        //     'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+        //   personId: Buffer.from(
+        //     'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+        //   personEmail: event.data.activity.actor.emailAddress,
+        //   personDisplayName: event.data.activity.actor.displayName,
+        //   personOrgId: Buffer.from(
+        //     'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+        //   readDate: new Date(event.data.activity.published).toISOString()
+        // };
+        membership = {
           id: Buffer.from(
-            'ciscospark://us/ACTIVITY/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
+            'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
           roomId: Buffer.from(
             'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
-          messageId: Buffer.from(
-            'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
           personId: Buffer.from(
             'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
           personEmail: event.data.activity.actor.emailAddress,
           personDisplayName: event.data.activity.actor.displayName,
           personOrgId: Buffer.from(
             'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
-          readDate: new Date(event.data.activity.published).toISOString()
+          lastActivity: 'read',
+          lastReadId: Buffer.from(
+            'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+          lastActivityDate: new Date(event.timestamp).toISOString()
         };
-        (this.readReceiptFn instanceof Function) ? 
-          this.readReceiptFn(readReceipt) : console.log('No app to send it to.');
+        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
         break;
 
       default:
