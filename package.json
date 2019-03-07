@@ -4,14 +4,17 @@
   "description": "a chat app using webex teams and webex sdk",
   "dependencies": {
     "axios": "^0.18.0",
-    "bootstrap": "^4.1.1",
+    "bootstrap": "^4.3.1",
     "ciscospark": "^1.49.3",
     "express": "^4.15.2",
     "font-awesome": "^4.7.0",
     "jquery": "^3.3.1",
     "popper.js": "^1.14.3",
     "react": "^16.4.0",
+    "react-bootstrap": "^1.0.0-beta.5",
     "react-dom": "^16.4.0",
+    "request": "^2.88.0",
+    "request-promise": "^4.2.4",
     "socket.io": "^1.7.3"
   },
   "scripts": {
