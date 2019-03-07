@@ -5,16 +5,31 @@ class Users extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      users: props.users
+      users: props.users,
+      usersById: props.usersById,
+      lastReadById: props.lastReadById,
+      lastMsgId: props.lastMsgId
     }
   }
 
   static getDerivedStateFromProps(nextProps, prevState) {
     return {
       users: nextProps.users,
+      usersById: nextProps.usersById,
+      lastReadById: nextProps.lastReadById,
+      lastMsgId: nextProps.lastMsgId
     }
   }
 
+  createTable() {
+    let table = []
+    for (let personId in this.state.lastReadById) {
+      if (this.state.lastReadById[personId] === this.state.lastMsgId) {
+        table.push(<tr><td>{this.state.usersById[personId]}</td></tr>);
+      }
+    }
+    return table;
+  }
 
   render() {
     return (
@@ -26,6 +41,10 @@ class Users extends React.Component {
             </div>
           )
         }) : 'No Users Online'}
+        <p>Read Status Current:</p>
+        <table><tbody>
+          {this.createTable()}
+          </tbody></table>
       </div>
     )
   }
