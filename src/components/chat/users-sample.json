@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Michele Russo (remote-advisor1)", 
+    "personId": "Webex person ID for Michele",
+    "rooms": [
+      "At least one Webex Room ID that Michele is member of is required",
+      "Additional room IDs in this array are not yet leveraged"
+    ],
+    "token": "An authorization token needed to initialize the SDK for Michele"
+  },
+  {
+    "name": "Emilia Accordi (customer1)",
+    "personId": "Webex person ID for Emilia",
+    "rooms": [
+      "At least one Webex Room ID that Emilia is member of is required",
+      "Additional room IDs in this array are not yet leveraged"
+    ],
+    "token": "An authorization token needed to initialize the SDK for Emilia"
+  },
+  {
+    "name": "Jacobo Calabrese (customer2)",
+    "personId": "Webex person ID for Jacobo",
+    "rooms": [
+      "At least one Webex Room ID that Jacobo is member of is required",
+      "Additional room IDs in this array are not yet leveraged"
+    ],
+    "token": "An authorization token needed to initialize the SDK for Jacobo"
+  },
+  {
+    "name": "Maria Gervasi (cc-agent1)",
+    "personId": "Webex person ID for Maria",
+    "rooms": [
+      "At least one Webex Room ID that Maria is member of is required",
+      "Additional room IDs in this array are not yet leveraged"
+    ],
+    "token": "An authorization token needed to initialize the SDK for Maria"
+  }
+]
