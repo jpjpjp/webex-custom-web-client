@@ -92,10 +92,10 @@ class ReadInfo {
    * @function sendReadReciept
    * @param {object} event - Internal Webex event to process
    */
-  sendReadReciept(actorId, objectId, targetId) {
-    this.ackOptions.body.actor.id = this.getUUID(actorId);
-    this.ackOptions.body.object.id = this.getUUID(objectId);
-    this.ackOptions.body.target.id = this.getUUID(targetId);
+  sendReadReciept(personId, messageId, roomId) {
+    this.ackOptions.body.actor.id = this.getUUID(personId);
+    this.ackOptions.body.object.id = this.getUUID(messageId);
+    this.ackOptions.body.target.id = this.getUUID(roomId);
     request(this.ackOptions).then(resp => {
       console.log(resp);
     }).catch(err => {
