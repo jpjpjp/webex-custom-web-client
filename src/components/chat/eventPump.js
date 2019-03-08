@@ -152,21 +152,6 @@ class EventPump {
 
       case ("acknowledge"):
         console.log('Got an acknowledge activity');
-        // readReceipt = {
-        //   id: Buffer.from(
-        //     'ciscospark://us/ACTIVITY/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-        //   roomId: Buffer.from(
-        //     'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
-        //   messageId: Buffer.from(
-        //     'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
-        //   personId: Buffer.from(
-        //     'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
-        //   personEmail: event.data.activity.actor.emailAddress,
-        //   personDisplayName: event.data.activity.actor.displayName,
-        //   personOrgId: Buffer.from(
-        //     'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
-        //   readDate: new Date(event.data.activity.published).toISOString()
-        // };
         membership = {
           id: Buffer.from(
             'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
@@ -178,8 +163,8 @@ class EventPump {
           personDisplayName: event.data.activity.actor.displayName,
           personOrgId: Buffer.from(
             'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
-          lastActivity: 'read',
-          lastReadId: Buffer.from(
+          lastActivity: 'updated',
+          lastSeenId: Buffer.from(
             'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
           lastActivityDate: new Date(event.timestamp).toISOString()
         };
