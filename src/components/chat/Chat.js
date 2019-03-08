@@ -60,14 +60,13 @@ class Chat extends React.Component {
   }
 
   // I think I can comment this out and force a "login" every time
-  // Hack to skip login during debugging
-
-  componentDidMount() {
-    this.setUserKey({
-      roomId: "Y2lzY29zcGFyazovL3VzL1JPT00vODE5MDMwZjAtNDA1MS0xMWU5LTkxMWUtZjE3YzMyNTVjZTlh",
-      token: "ZWNiN2YxZDYtMGZhNS00M2VkLThmMWUtNmE5OGYyMTA4Y2Q4OTlkOTM5NjItNjVm_PF84_ce861fba-6e2f-49f9-9a84-b354008fac9e"
-    });
-  }
+  // Uncomment to skip login during debugging
+  // componentDidMount() {
+  //   this.setUserKey({
+  //     roomId: "Y2lzY29zcGFyazovL3VzL1JPT00vODE5MDMwZjAtNDA1MS0xMWU5LTkxMWUtZjE3YzMyNTVjZTlh",
+  //     token: "ZWNiN2YxZDYtMGZhNS00M2VkLThmMWUtNmE5OGYyMTA4Y2Q4OTlkOTM5NjItNjVm_PF84_ce861fba-6e2f-49f9-9a84-b354008fac9e"
+  //   });
+  // }
 
   // Its not clear we need this UUID thing when webex powers our chat
   // generateUID() {
@@ -167,14 +166,25 @@ class Chat extends React.Component {
           }
           // We will check the last message id when we
           // process or generate read receipts  
-          lastMsgId = messageList.items[0].id;
-
-          // We keep track of the last read message by each user
-          // TODO figure out how to query this from conversataions for other users
-          // If our user has an older last read we should generate a read receipt here
-          lastReadById[user.id] = lastMsgId;
-
-          
+          lastMsgId = messageList.items[0]? messageList.items[0].id : '';
+          return readInfo.getSpaceInfo(roomId);
+        }).then((lastReadInfo) => {
+          if (lastReadInfo) {
+            // We keep track of the last read message by each user
+            for (let idx in lastReadInfo) {
+              let memberInfo = lastReadInfo[idx];
+              lastReadById[memberInfo.personId] = memberInfo.messageId;
+            }
+            // If our user has an older last read we should generate a read receipt here
+            if (lastMsgId) {
+              if (lastReadById[user.id] != lastMsgId) {
+                lastReadById[user.id] = lastMsgId;
+                readInfo.sendReadReciept(user.id, lastMsgId,roomId);
+              }
+            } else {
+              lastReadById[user.id] = '';
+            }
+          }
           // OK, we have everything we need to display the space, force a render
           return this.setState({
             eventPump: eventPump,
@@ -192,12 +202,13 @@ class Chat extends React.Component {
         }).then(() => this.initChat())
         .catch((error) => {
           console.error(error);
+          alert('Couldnt initialize space');
         });
       } else {
-        alert('Couldnt initialize for '+username);
+        alert('Couldnt initialize space');
       }
     } else {
-      alert('Couldnt find Webex info for '+username);
+      alert('Couldnt initialize space');
     }
   }
 

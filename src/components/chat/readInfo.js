@@ -8,7 +8,7 @@ const request = require('request-promise');
 class ReadInfo {
   constructor(token) {
     this.token = token;
-    this.reqOptions = {
+    this.ackOptions = {
       "uri": 'https://conv-a.wbx2.com/conversation/api/v1/activities?personRefresh=true',
       "method": 'POST',
       "json": true,
@@ -38,6 +38,51 @@ class ReadInfo {
         }
       }
     };
+    this.fetchUri = 'https://conv-a.wbx2.com/conversation/api/v1/conversations/';
+    this.fetchOptions = {
+      "method": 'GET',
+      "json": true,
+      headers: {
+        'Authorization': 'Bearer '+this.token,
+        'Accept': 'application/json'
+      },
+      qs: {
+        participantAckFilter: "all",  // show lastAck info for each participant
+        activitiesLimit: 0            // don't send the whole history of activity
+      }
+    };
+  }
+
+  /**
+   * Fetch the most recent activity info for each room participant
+   *
+   * @function getSpaceInfo
+   * @param {string} roomId - ID of the space we are interested in
+   */
+  getSpaceInfo(roomId) {
+    this.fetchOptions.uri = this.fetchUri + this.getUUID(roomId);
+    return (request(this.fetchOptions).then(resp => {
+      console.log(resp);
+      let lastReadInfo = [];
+      if ((resp) && (resp.participants) && (resp.participants.items)) {
+        // We keep track of the last read message by each user
+        for (let index in resp.participants.items) {
+          let participant = resp.participants.items[index];
+          if ((participant.roomProperties) && (participant.roomProperties.lastSeenActivityUUID)) {
+            lastReadInfo = lastReadInfo.concat({
+              personId: Buffer.from(
+                'ciscospark://us/PEOPLE/'+participant.entryUUID).toString('base64').replace(/=*$/, ""),
+              messageId: Buffer.from(
+                'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "")
+            });
+          }
+        } 
+      }     
+      return Promise.resolve(lastReadInfo);
+    }).catch(err => {
+      alert('Failed to fetch read receipt info for new space: '+err.message);
+      return Promise.reject(err);
+    }));
   }
 
   /**
@@ -48,10 +93,10 @@ class ReadInfo {
    * @param {object} event - Internal Webex event to process
    */
   sendReadReciept(actorId, objectId, targetId) {
-    this.reqOptions.body.actor.id = this.getUUID(actorId);
-    this.reqOptions.body.object.id = this.getUUID(objectId);
-    this.reqOptions.body.target.id = this.getUUID(targetId);
-    request(this.reqOptions).then(resp => {
+    this.ackOptions.body.actor.id = this.getUUID(actorId);
+    this.ackOptions.body.object.id = this.getUUID(objectId);
+    this.ackOptions.body.target.id = this.getUUID(targetId);
+    request(this.ackOptions).then(resp => {
       console.log(resp);
     }).catch(err => {
       alert('Failed to send read receipt to Webex: '+err.message);
