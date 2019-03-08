@@ -1,3 +1,9 @@
+// Chat.js
+// This is the main class for our webex powered chat app
+// It currently includes all the logic for interacting
+// with webex
+// An ideal implementation would probably encapsulate this better...
+
 import React from 'react';
 import Users from "./Users";
 import Messages from "./Messages";
@@ -7,8 +13,11 @@ import { init as initTeams } from 'ciscospark';
 import { AssertionError } from 'assert';
 
 // Create the object for generating client side events
+// NEW API
 var EventPump = require('./eventPump.js');
-// Create an object for sending and getting read receipts
+// Create an object for sending read receipts and getting
+// information on read status when loading a new room
+// NEW API
 var ReadInfo = require('./readInfo.js');
 
 
@@ -18,8 +27,10 @@ class Chat extends React.Component {
   constructor(props) {
     super(props);
 
-    // Toggle between internal socket and webhook server modes
-    let internalSocket = true;
+    // Toggle between webhook private interface and 
+    // read receipt+webhook server modes which uses all publice interfaces
+    // NOTE:  The webhook server approach has NOT been implemented yet
+    let usePrivateInterfaces = true;
 
     // These elements are used in both modes
     this.state = {
@@ -40,44 +51,28 @@ class Chat extends React.Component {
       roomId: ''                // Webex Teams Space that will power this chat
     }
 
-    if (internalSocket) {
-      this.state.internalSocket = true;  // SDK events generates callbacks
+    if (usePrivateInterfaces) {
+      this.state.usePrivateInterfaces = true;  // SDK events generates callbacks
       this.state.eventPump = {}         // generate events from internal SDK interfaces  
       this.state.readInfo = {}          // talk to internal interfaces for read receipts
     } else {
-      this.state.internalSocket = true;  // webhook server generates callbacks
+      // This mode is not yet implemented
+      alert('Sorry, this is not going to work');
+      this.state.usePrivateInterfaces = false;  // webhook server generates callbacks
       this.socket = null;       
       this.state.uid = localStorage.getItem('uid') ? localStorage.getItem('uid') : this.generateUID();
     }
 
-    // hacks to test the SDK, this would normaly be in permanent storage
-    // Associate user names with their token
-    localStorage.setItem('jpbulk', 'MjI4YTgwZjAtZGQ1MS00MTRjLWIxNDEtZTdkZDkyMTdkZjFhMWM1MjZiMmUtNTI5')
-    // Assoicate users to the rooms they belong in
-    // TODO? handle logic to create rooms if none exist
-    localStorage.setItem('Y2lzY29zcGFyazovL3VzL1BFT1BMRS82YWE2ZGE5OS0xYzdlLTQ4MWItODY3YS03MWY2NTIwNDk0MzM', 'Y2lzY29zcGFyazovL3VzL1JPT00vYjU0ZDJlMjAtM2VmMy0xMWU5LWJlYzQtYjE3MjI3YTI4YTBi');
-
   }
 
-  // I think I can comment this out and force a "login" every time
   // Uncomment to skip login during debugging
   // componentDidMount() {
   //   this.setUserKey({
-  //     roomId: "Y2lzY29zcGFyazovL3VzL1JPT00vODE5MDMwZjAtNDA1MS0xMWU5LTkxMWUtZjE3YzMyNTVjZTlh",
-  //     token: "ZWNiN2YxZDYtMGZhNS00M2VkLThmMWUtNmE5OGYyMTA4Y2Q4OTlkOTM5NjItNjVm_PF84_ce861fba-6e2f-49f9-9a84-b354008fac9e"
+  //     roomId: "RoomID you want to use for debugging",
+  //     token: "Token for user you will use for debugging"
   //   });
   // }
 
-  // Its not clear we need this UUID thing when webex powers our chat
-  // generateUID() {
-  //   let text = '';
-  //   let possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  //   for (let i = 0; i < 15; i++) {
-  //     text += possible.charAt(Math.floor(Math.random() * possible.length));
-  //   }
-  //   localStorage.setItem('uid', text);
-  //   return text;
-  // }
 
   /**
    * Once a user has "logged in" by choosing one of a preset list of webex user
@@ -94,7 +89,7 @@ class Chat extends React.Component {
    */
   setUserKey(userInfo) {
     let token = userInfo.token;
-    let roomId = userInfo.roomId
+    let roomId = userInfo.roomId;
     if (token) {
       // Initialize the SDK for this user
       let teams = (window.webexteams = initTeams({
@@ -104,150 +99,153 @@ class Chat extends React.Component {
       }));
 
       if (teams) {
+        // NEW API call here
         // Initialize our event pump with the methods to call for each event type
-        // TODO consider if this should happen AFTER we query
+
+        // TODO consider if this should happen here or AFTER we query
         // for the room membership and message details
         // A real app must consider that events that occur while 
         // we are doing the initial webex space setup may show up twice:
         // once in our event queue, and again when we poll for space info
         let eventPump = {};
-        if (this.state.internalSocket) {
+        if (this.state.usePrivateInterfaces) {
           eventPump = new EventPump(teams, 
             this.processMessageEvent.bind(this),
             this.processMembershipEvent.bind(this));
+        } else {
+          alert('Sorry this mode is not built yet.');
         }
 
+        // NEW API call here
+        // Initialize our oject to send read reciepts
         let readInfo = new ReadInfo(token);
 
         let username = '';
         let user = null;
-        let users = [];
-        let usersById = [];
-        let messages = [];
-        let lastReadById = [];
-        let lastMsgId = '';
         // Get the webex person details for this user
         teams.people.get('me').then((userObj) => {
           user = userObj;
           user.displayName ? username = user.displayName : username = user.firstName + ' '+ user.lasName;
-
-          // Now lets get the space membership info
-          return teams.memberships.list({roomId: roomId});
-        }).then((memberships) => {
-          // Keep a local cache of members for display purposes
-          for (let i=0; i<memberships.items.length; i++) {
-            let member = memberships.items[i]; 
-            // Message events have the sender ID but not name
-            // Map ID to Name locally to avoid multiple SDK queries
-            usersById[member.personId] = member.personDisplayName;
-            users = users.concat([member.personDisplayName]);
-          }
-          // Now lets get the messages
-          return teams.messages.list({
-            roomId: roomId,
-            max: 20
-          });
-        }).then((messageList) => {
-          // Put the messages in our local store from oldest to newest
-          for (let i=messageList.items.length-1; i>=0; i--) {
-            let msg = messageList.items[i]; 
-            // Store the username and the message text locally for fast rendering
-            // TODO, what is type for and why the hierarcy?
-            messages =messages.concat([{
-              username: usersById[msg.personId],    
-                  // This will not work if the author has left the space, 
-                  // better would be to check for that case and query the id via /people
-              //uid: 12345,         // Maybe don't need this anymore?
-              message: {
-                type: 'message',
-                text: msg.html ? msg.html : msg.text
-              }
-            }]);
-          }
-          // We will check the last message id when we
-          // process or generate read receipts  
-          lastMsgId = messageList.items[0]? messageList.items[0].id : '';
-          return readInfo.getSpaceInfo(roomId);
-        }).then((lastReadInfo) => {
-          if (lastReadInfo) {
-            // We keep track of the last read message by each user
-            for (let idx in lastReadInfo) {
-              let memberInfo = lastReadInfo[idx];
-              lastReadById[memberInfo.personId] = memberInfo.messageId;
-            }
-            // If our user has an older last read we should generate a read receipt here
-            if (lastMsgId) {
-              if (lastReadById[user.id] != lastMsgId) {
-                lastReadById[user.id] = lastMsgId;
-                readInfo.sendReadReciept(user.id, lastMsgId,roomId);
-              }
-            } else {
-              lastReadById[user.id] = '';
-            }
-          }
-          // OK, we have everything we need to display the space, force a render
           return this.setState({
             eventPump: eventPump,
             readInfo: readInfo,
             user: user,
             username: username,
-            users: users,
-            usersById: usersById,
-            messages: messages,
-            lastReadById: lastReadById,
-            lastMsgId: lastMsgId,
-            roomId: roomId,
             teams: teams
           });
-        }).then(() => this.initChat())
-        .catch((error) => {
+        }).then(() => {
+          // Our user is set up.  Lets set up the initial space for the chat
+          return this.setUpSpace(roomId);
+        }).catch((error) => {
           console.error(error);
-          alert('Couldnt initialize space');
+          alert('Couldnt initialize user! (Check the console)');
         });
       } else {
-        alert('Couldnt initialize space');
+        alert('Couldnt initialize webex for user with token supplied');
       }
     } else {
-      alert('Couldnt initialize space');
+      alert('Couldnt initialize user, no token supplied');
     }
+  }
+
+  /**
+   * Configure a new space
+   * 
+   * Currently our GUI only supports one space, but this method can be called
+   * in a more robust GUI that supports switching spaces for the same user
+   * register that user with the Webex SDK and load the predefined space to start in
+   *
+   * @function setUpSpace
+   * @param {string} roomId - ID of the space we want the user to chat in
+   */
+  setUpSpace(roomId) {
+    // Init variables we'll set up here
+    let users = [];     
+    let usersById = [];  // convenience for space member name display
+    let messages = [];
+    let lastMsgId = '';
+    let lastReadById = []  // maintain last read state per space member
+
+    // Start by getting the list of users in the space
+    this.state.teams.memberships.list({roomId: roomId}).then((memberships) => {
+      // Keep a local cache of members for display purposes
+      for (let i=0; i<memberships.items.length; i++) {
+        let member = memberships.items[i]; 
+        // Message events have the sender ID but not name
+        // Map ID to Name locally to avoid multiple SDK queries
+        usersById[member.personId] = member.personDisplayName;
+        users = users.concat([member.personDisplayName]);
+      }
+      // Now lets get the messages
+      return this.state.teams.messages.list({
+        roomId: roomId,
+        max: 20
+      });
+    }).then((messageList) => {
+      // Put the messages in our local store from oldest to newest
+      for (let i=messageList.items.length-1; i>=0; i--) {
+        let msg = messageList.items[i]; 
+        // Store the username and the message text locally for fast rendering
+        // TODO, what is type for and why the hierarcy?
+        messages =messages.concat([{
+          username: usersById[msg.personId] ? usersById[msg.personId] : 'User Who Left',   
+              // better would be to check for this case and query the id via people.get()
+          message: {
+            type: 'message',
+            text: msg.html ? msg.html : msg.text
+          }
+        }]);
+      }
+      // We will check the last message id when we
+      // process or generate read receipts  
+      lastMsgId = messageList.items[0]? messageList.items[0].id : '';
+
+      // NEW API call here
+      // Get the last read status for members in the space
+      return this.state.readInfo.getSpaceInfo(roomId);
+    }).then((lastReadInfo) => {
+      if (lastReadInfo) {
+        // We keep track of the last read message by each user
+        for (let idx in lastReadInfo) {
+          let memberInfo = lastReadInfo[idx];
+          lastReadById[memberInfo.personId] = memberInfo.messageId;
+        }
+        // If our user has an older last read we should generate a read receipt here
+        if (lastMsgId) {
+          if (lastReadById[this.state.user.id] != lastMsgId) {
+            lastReadById[this.state.user.id] = lastMsgId;
+            // NEW API
+            this.state.readInfo.sendReadReciept(this.state.user.id, lastMsgId,roomId);
+          }
+        } else {
+          lastReadById[this.state.user.id] = '';
+        }
+      }
+      // OK, we have everything we need to display the space, force a render
+      return this.setState({
+        users: users,
+        usersById: usersById,
+        messages: messages,
+        lastMsgId: lastMsgId,
+        lastReadById: lastReadById,
+        roomId: roomId,
+      });
+    }).then(() => this.initChat()).catch((error) => {
+      console.error(error);
+      alert('Couldnt initialize space!  (Check console)');
+    });
   }
 
 /**
    * After we have set up for a user, move to "chat mode"
    * This means changing the render from login mode to chat
-   * If working with a seperate server, open socket connections
    *
    * @function initChat
    */
   initChat() {
-    // Not sure if I need this...
-    //localStorage.setItem('username', this.state.username);
     this.setState({
       chat_ready: true,   // changes render from login mode to chat mode
     });
-
-    if (!this.state.internalSocket) {
-      // Set up a socket with the server
-      // I'll use this to get notified of new messages
-      // and (possibly) to notify other clients of read activities
-      this.socket = socketIOClient('ws://localhost:8989', {
-        query: 'username=' + this.state.username + '&uid=' + this.state.uid
-      });
-
-      this.socket.on('updateUsersList', function (users) {
-        console.log(users);
-        this.setState({
-          users: users
-        });
-      }.bind(this));
-
-      this.socket.on('message', function (message) {
-        this.setState({
-          messages: this.state.messages.concat([message])
-        });
-        this.scrollToBottom();
-      }.bind(this));
-    }
   }
 
   // TODO -- see if these can be distributed more efficiently
@@ -264,23 +262,30 @@ class Chat extends React.Component {
     console.log(message);
     // TODO encapsulate this in the read reciept logic better
     if (this.state.lookingState === 'back') {
-      // This is the first new message since coming back
+      // This is the first new message sent since coming back
       // remove the New Messages notification if we have one
       this.removeNewMessageIndicator()
     }
-    if (this.state.teams) {
-      // Lets send the message via teams if configured
-      let roomId = this.state.roomId;
-      this.state.teams.messages.create({
-        roomId,
-        text: message.text
-      });
-    } 
 
-    this.scrollToBottom();
+    // Send the message to webex for distribution
+    this.state.teams.messages.create({
+      roomId: this.state.roomId,
+      text: message.text
+    }).catch((e) => {
+      console.error(error);
+      alert('Error sending message to webex!  (Check console)');
+    });
   }
 
-processMessageEvent(message) {
+/**
+   * Process incoming message events sent by our eventPump 
+   * NEW API -- we registered handler when we initialized 
+   * the event pump
+   *
+   * @function processMessageEvent
+   * @param {object} message - message event payload
+   */
+  processMessageEvent(message) {
   try {
     switch(message.lastActivity) {
       case('created'):
@@ -292,13 +297,22 @@ processMessageEvent(message) {
       default:
         alert('Got unexpected message event activity: '+message.lastActivity);
     }
-
   } catch(e) {
     alert('Got notified of a message event, but cannot get it: '+e.message);
   };
 }
 
-processMembershipEvent(membership) {
+/**
+   * Process incoming membership events sent by our eventPump 
+   * NEW API -- we registered handler when we initialized 
+   * the event pump
+   * 
+   * These events will include read receipts from other users
+   *
+   * @function processMembershipEvent
+   * @param {object} membership - membership event payload
+   */
+  processMembershipEvent(membership) {
   try {
     switch(membership.lastActivity) {
       case('created'):
@@ -307,7 +321,7 @@ processMembershipEvent(membership) {
       case('deleted'):
         this.membershipDeleted(membership);
         break
-      case('read'):
+      case('updated'):
         this.readReceipt(membership);
         break
       default:
@@ -322,7 +336,8 @@ processMembershipEvent(membership) {
 
 
 /**
- * Process a message that was created by any user in our spaces
+ * Process an incoming new message event
+ * NEW API
  *
  * @function messageCreated
  * @param {string} msgId - id of new message
@@ -348,7 +363,6 @@ processMembershipEvent(membership) {
       return this.setState({
         messages: this.state.messages.concat([{
           username: this.state.usersById[msg.personId],
-          //uid: 12345,  // Need to figure out if I still need this
           message: {
             type: 'message',
             text: msg.html ? msg.html : msg.text
@@ -357,8 +371,9 @@ processMembershipEvent(membership) {
         lastMsgId: msg.id,
         lastReadById: this.state.lastReadById
       });
-    }).then(() => this.scrollToBottom())
-    .catch((e) => {
+    }).then(() => {
+      this.scrollToBottom();
+    }).catch((e) => {
       alert('Got notified of a new message, but cannot get it: '+e.message);
     });
   }
@@ -366,6 +381,7 @@ processMembershipEvent(membership) {
 /**
  * Process a message that was deleted
  * Not all custom clients will support this
+ * NEW API
  *
  * @function messageDeleted
  * @param {object} message - message object
@@ -378,9 +394,9 @@ processMembershipEvent(membership) {
 
 /**
   * A new user is in the space update our user store
-  *
+  * NEW API
   * @function membershipCreated
-  * @param {object} membership - membership object 
+  * @param {object} membership - membership object with lastActivity == created
   */
   membershipCreated(membership) {
     try {
@@ -407,9 +423,10 @@ processMembershipEvent(membership) {
 
 /**
   * A user was removed from the space update our user store
+  * NEW API
   *
   * @function membershipDeleted
-  * @param {object} membership - membership object 
+  * @param {object} membership - membership object with lastActivity == deleted
   */
   membershipDeleted(membership) {
     try {
@@ -436,6 +453,7 @@ processMembershipEvent(membership) {
 
 /**
   * A user has read messages
+  * NEW API
   *
   * @function readReceipt
   * @param {object} membership - membership with lastActivity == read
@@ -449,15 +467,15 @@ processMembershipEvent(membership) {
       );
       return;
     }
-    if (!membership.lastReadId) {
+    if (!membership.lastSeenId) {
       alert('Got a membership event with lastActivity read, but not messageId');
       return;
     }
     // If this is our own read receipt there is nothing to do.
     if (membership.personId !== this.state.user.id) {
       // Update Read Receipt list if this is for the last message in our list
-      if (membership.lastReadId === this.state.lastMsgId) {
-        this.state.lastReadById[membership.personId] = membership.lastReadId;
+      if (membership.lastSeenId === this.state.lastMsgId) {
+        this.state.lastReadById[membership.personId] = membership.lastSeenId;
         this.setState({lastReadById: this.state.lastReadById})
         // if read receipt arrived after membership was deleted
       } else {
@@ -472,21 +490,24 @@ processMembershipEvent(membership) {
   }
 }
 
-// The following methods implement and  extremely crude
-  // logic for read receipts in our client
+// The following methods implement an extremely crude
+// logic for rendering a "New Messages" GUI
+// Since this sample only has one space "new messages"
+// will only happen if the user hits the "I'm not looking" button
 
-  // React to a "Im not looking" action
+  // React to a "Stop Looking" action
   goneAway(e) {
     console.log('User is not looking');
     if (this.state.lookingState == 'away') {
-      // Shouldn't happen?
       console.log('Already in not looking state');
       return;
     }
+    // If the user took this action we assume all existing
+    // messages are read.
     // Get rid of any previous New Message indicators
     this.removeNewMessageIndicator()
     // Set the looking state to away and add a special
-    // Message in the queue to indicate where our 
+    // marker in the queue to indicate where our 
     // New Messages notification should go
     let newMessagesIndex = this.state.messages.length;
     this.setState({
@@ -501,20 +522,12 @@ processMembershipEvent(membership) {
         }
       }])
     });
-    // Todo Add a new socket event to notify other clients
-    // this.socket.emit('message', {
-    //   username: localStorage.getItem('username'),
-    //   uid: localStorage.getItem('uid'),
-    //   message: message,
-    // });
-    this.scrollToBottom();
   }
 
-  // React to a "Im back" action
+  // React to a "Start Looking" action
   isBack(e) {
     console.log('user is back');
     if (this.state.lookingState == 'looking') {
-      // Shouldn't happen?
       console.log('Already in is looking state');
       return;
     }
@@ -537,21 +550,17 @@ processMembershipEvent(membership) {
     if (this.state.lastReadById[this.state.user.id] != 
         this.state.lastMsgId) 
     {
+      // NEW API
       this.state.readInfo.sendReadReciept(
         this.state.user.id,
         this.state.lastMsgId,
         this.state.roomId
       );
     }
-    // Todo Add a new socket event to notify other clients
-    // this.socket.emit('message', {
-    //   username: localStorage.getItem('username'),
-    //   uid: localStorage.getItem('uid'),
-    //   message: message,
-    // });
     this.scrollToBottom();
   }
 
+  // Takes the new message marker out of the queue
   removeNewMessageIndicator(e) {
     if ((this.state.newMessagesIndex > -1) &&
       (this.state.newMessagesIndex < this.state.messages.length)) 
@@ -578,12 +587,6 @@ processMembershipEvent(membership) {
       <div className="chat">
         {this.state.chat_ready ? (
           <React.Fragment>
-            {/* <Users users={this.state.users} />
-            <ReadBy 
-              usersById={this.state.usersById} 
-              lastReadById={this.state.lastReadById} 
-              lastMsgId={this.state.lastMsgId} 
-            /> */}
             <Users users={this.state.users}
               usersById={this.state.usersById} 
               lastReadById={this.state.lastReadById} 
