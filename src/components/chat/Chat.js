@@ -204,10 +204,10 @@ class Chat extends React.Component {
       // Get the last read status for members in the space
       return this.state.readInfo.getSpaceInfo(roomId);
     }).then((lastReadInfo) => {
-      if (lastReadInfo) {
+      if ((lastReadInfo) && (lastReadInfo.items)) {
         // We keep track of the last read message by each user
-        for (let idx in lastReadInfo) {
-          let memberInfo = lastReadInfo[idx];
+        for (let idx in lastReadInfo.items) {
+          let memberInfo = lastReadInfo.items[idx];
           lastReadById[memberInfo.personId] = memberInfo.messageId;
         }
         // If our user has an older last read we should generate a read receipt here
@@ -220,6 +220,8 @@ class Chat extends React.Component {
         } else {
           lastReadById[this.state.user.id] = '';
         }
+      } else {
+        lastReadById[this.state.user.id] = '';
       }
       // OK, we have everything we need to display the space, force a render
       return this.setState({

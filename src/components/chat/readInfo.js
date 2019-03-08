@@ -63,17 +63,21 @@ class ReadInfo {
     this.fetchOptions.uri = this.fetchUri + this.getUUID(roomId);
     return (request(this.fetchOptions).then(resp => {
       console.log(resp);
-      let lastReadInfo = [];
+      let lastReadInfo = {items: []};
       if ((resp) && (resp.participants) && (resp.participants.items)) {
         // We keep track of the last read message by each user
         for (let index in resp.participants.items) {
           let participant = resp.participants.items[index];
-          if ((participant.roomProperties) && (participant.roomProperties.lastSeenActivityUUID)) {
-            lastReadInfo = lastReadInfo.concat({
+          if (participant.roomProperties) {
+            let messageId = '';
+            if (participant.roomProperties.lastSeenActivityUUID) {
+              messageId = Buffer.from(
+                'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "");
+            }
+            lastReadInfo.items = lastReadInfo.items.concat({
               personId: Buffer.from(
                 'ciscospark://us/PEOPLE/'+participant.entryUUID).toString('base64').replace(/=*$/, ""),
-              messageId: Buffer.from(
-                'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "")
+              messageId: messageId
             });
           }
         } 
