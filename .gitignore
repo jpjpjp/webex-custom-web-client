@@ -2,4 +2,4 @@
 .cache
 node_modules
 dist
-
+./src/components/chat/users.json 
