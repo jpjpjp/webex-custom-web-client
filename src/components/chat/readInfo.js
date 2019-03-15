@@ -27,7 +27,7 @@ class ReadInfo {
           "id":""
         },
         "target":{
-          "id":"819030f0-4051-11e9-911e-f17c3255ce9a",
+          "id":"",
           "objectType":"conversation",
           "activities":{
             "items":[]
@@ -68,18 +68,21 @@ class ReadInfo {
         // We keep track of the last read message by each user
         for (let index in resp.participants.items) {
           let participant = resp.participants.items[index];
+          let participantInfo = {};
+          if (participant.entryUUID) {
+            participantInfo.personId = Buffer.from(
+              'ciscospark://us/PEOPLE/'+participant.entryUUID).toString('base64').replace(/=*$/, "");
+          }
           if (participant.roomProperties) {
-            let messageId = '';
             if (participant.roomProperties.lastSeenActivityUUID) {
-              messageId = Buffer.from(
+              participantInfo.messageId = Buffer.from(
                 'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "");
             }
-            lastReadInfo.items = lastReadInfo.items.concat({
-              personId: Buffer.from(
-                'ciscospark://us/PEOPLE/'+participant.entryUUID).toString('base64').replace(/=*$/, ""),
-              messageId: messageId
-            });
+            if (participant.roomProperties.lastSeenActivityDate) {
+              participantInfo.lastSeenDate = participant.roomProperties.lastSeenActivityDate;
+            }
           }
+          lastReadInfo.items = lastReadInfo.items.concat(participantInfo);
         } 
       }     
       return Promise.resolve(lastReadInfo);
