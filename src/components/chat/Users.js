@@ -26,7 +26,7 @@ class Users extends React.Component {
     let rowIndex=1;
     for (let personId in this.state.lastReadById) {
       if (this.state.lastReadById[personId] === this.state.lastMsgId) {
-        table.push(<tr>key={rowIndex++}<td>{this.state.usersById[personId]}</td></tr>);
+        table.push(<tr key={rowIndex++}><td>{this.state.usersById[personId]}</td></tr>);
       }
     }
     return table;
@@ -44,6 +44,7 @@ class Users extends React.Component {
         }) : 'No Users Online'}
         <p>Read Status Current:</p>
         <table><tbody>
+          {this.createTable()}
         </tbody></table>
       </div>
     )
