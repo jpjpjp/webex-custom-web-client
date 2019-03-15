@@ -91,6 +91,7 @@ A chat client that can send and receive read receipts can keep its GUI up to dat
 
 This function will return object with an array of objects.  Each object will include:
 * personId: the ID of a member of the space
-* messageId: the last message that the user sent a read receipt for
+* lastSeenId: the last message that the user sent a read receipt for
+* lastSeenDate: the date of the last activity
 
-This array may **not** include information on all members in the space.   If there is no information available on the last message that they read then no information about that space member is included in the returned array.
+This array may **not** include lastSeen information on all members in the space.   If there is no information available on the last message that they read then no the lastSeen fields will not be included in the object.
