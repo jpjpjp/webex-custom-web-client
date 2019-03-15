@@ -75,7 +75,7 @@ class ReadInfo {
           }
           if (participant.roomProperties) {
             if (participant.roomProperties.lastSeenActivityUUID) {
-              participantInfo.messageId = Buffer.from(
+              participantInfo.lastSeenId = Buffer.from(
                 'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "");
             }
             if (participant.roomProperties.lastSeenActivityDate) {
