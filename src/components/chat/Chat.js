@@ -208,7 +208,7 @@ class Chat extends React.Component {
         // We keep track of the last read message by each user
         for (let idx in lastReadInfo.items) {
           let memberInfo = lastReadInfo.items[idx];
-          lastReadById[memberInfo.personId] = memberInfo.messageId;
+          lastReadById[memberInfo.personId] = memberInfo.lastSeenId;
         }
         // If our user has an older last read we should generate a read receipt here
         if (lastMsgId) {
