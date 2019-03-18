@@ -65,7 +65,7 @@ When reading through Chat.js code look for comments that include "NEW API" to fi
 
 ## Eventing
 
-The eventing logic is encapsulated in EventPump module defined in [eventPump.js](src/components/chat/eventPump.js).  This module can be instantiated after the SDK is intialized.  Its constructor parameters are the initialized SDK and callback functions for message and membership events.  The contstructor registers for the internal events. 
+The eventing logic is encapsulated in EventPump module defined in [eventPump.js](src/components/chat/eventPump.js).  This module can be instantiated after the SDK is intialized.  Its constructor parameters are the initialized SDK and callback functions for message and membership events.  The callback function for message events get either an error or a message object. The callback function for membership events get either an error or a membership object.  The contstructor registers for the internal events. 
 
 Once instantianted, the EventPump.processEvent function will convert internal message and membership events to a structure that is as similar as possible to the "data" object in the  standard message or membershp webhook payload.  There are some additional values in this object that your code can inspect:
 
