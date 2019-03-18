@@ -136,8 +136,8 @@ class Chat extends React.Component {
         }).then(() => {
           // Our user is set up.  Lets set up the initial space for the chat
           return this.setUpSpace(roomId);
-        }).catch((error) => {
-          console.error(error);
+        }).catch((e) => {
+          console.error(e.message);
           alert('Couldnt initialize user! (Check the console)');
         });
       } else {
@@ -232,8 +232,8 @@ class Chat extends React.Component {
         lastReadById: lastReadById,
         roomId: roomId,
       });
-    }).then(() => this.initChat()).catch((error) => {
-      console.error(error);
+    }).then(() => this.initChat()).catch((e) => {
+      console.error(e.message);
       alert('Couldnt initialize space!  (Check console)');
     });
   }
@@ -274,7 +274,7 @@ class Chat extends React.Component {
       roomId: this.state.roomId,
       text: message.text
     }).catch((e) => {
-      console.error(error);
+      console.error(e.message);
       alert('Error sending message to webex!  (Check console)');
     });
   }
@@ -287,8 +287,13 @@ class Chat extends React.Component {
    * @function processMessageEvent
    * @param {object} message - message event payload
    */
-  processMessageEvent(message) {
-  try {
+  processMessageEvent(e, message) {
+    try {
+      if (e) {
+      console.error('Error processing Webex Event: '+e.message);
+      return;
+    }
+
     switch(message.lastActivity) {
       case('created'):
         this.messageCreated(message.id, message.roomId);
@@ -314,8 +319,13 @@ class Chat extends React.Component {
    * @function processMembershipEvent
    * @param {object} membership - membership event payload
    */
-  processMembershipEvent(membership) {
-  try {
+  processMembershipEvent(e, membership) {
+    try {
+      if (e) {
+        console.error('Error processing Webex Event: '+e.message);
+        return;
+      }
+
     switch(membership.lastActivity) {
       case('created'):
         this.membershipCreated(membership);
@@ -390,7 +400,7 @@ class Chat extends React.Component {
  */
   messageDeleted(message) {
     // TODO
-    alert('A messages was delete by '+this.state.usersById[message.personId]+
+    alert('A messages was deleted by '+this.state.usersById[message.personId]+
       '\nHave not implemented client side GUI to deal with this');
   }
 

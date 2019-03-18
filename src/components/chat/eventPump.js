@@ -26,21 +26,22 @@ class EventPump {
    * @param {object} event - Internal Webex event to process
    */
   processEvent(event) {
-    console.log(event);
-    if (!event.data.activity.verb) {
-      console.log('No activity verb to process event, ignoring');
-      return;
-    }
+    try {
+      console.log(event);
+      if ((!event) || (!event.data) || (!event.data.activity) || (!event.data.activity.verb)) {
+        let msg = 'EventPump: Received event with no activity verb to process, ignoring';
+        (this.messageEventCb) ? this.messageEventCb(new Error(msg)) : console.error(msg);
+        return;
+      }
 
-    let membership = {};
-    let message = {};
-    switch(event.data.activity.verb){
-      case ("post"):
-      case ("share"):
-        console.log('Got a message created activity');
-        // Message is encrypted.  We'll just send the message ID
-        // so the client can GET the full unencyrpted message object
-        try {
+      let membership = {};
+      let message = {};
+      switch(event.data.activity.verb) {
+        case ("post"):
+        case ("share"):
+          console.log('Got a message created activity');
+          // Message is encrypted.  We'll just send the message ID
+          // so the client can GET the full unencyrpted message object
           message = {
             id: Buffer.from(
               'ciscospark://us/MESSAGE/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
@@ -60,16 +61,13 @@ class EventPump {
             lastActivityDate:  new Date(event.timestamp).toISOString()
           };
           console.log('Will tell client to fetch message ID: %s from room: %s',message.id, message.roomId);
-        } catch(e) {
-          console.log('Failed getting data from event: '+e.message);
-        }
-        (this.messageEventCb) ? this.messageEventCb(message) : console.log('No app to send it to.');
-        break;
+          (this.messageEventCb) ? this.messageEventCb(null, message) : 
+            console.error('Missing callback for to send message event to.');
+          break;
         
-      case ("delete"):
-      case ("tombstone"):     // Its not clear what the difference is between these two
-        console.log('Got an delete message activity');
-        try {
+        case ("delete"):
+        case ("tombstone"):     // Its not clear what the difference is between these two
+          console.log('Got an delete message activity');
           message = {
             id: Buffer.from(
               'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
@@ -89,15 +87,12 @@ class EventPump {
             lastActivityDate:  new Date(event.timestamp).toISOString() 
           };
           console.log('Will tell client to delete message ID: %s from room: %s',message.id, message.roomId);
-        } catch(e) {
-          console.log('Failed getting data from event: '+e.message);
-        }
-        (this.messageEventCb) ? this.messageEventCb(message) : console.log('No app to send it to.');
-        break;
+          (this.messageEventCb) ? this.messageEventCb(null, message) : 
+            console.error('Missing callback for to send message event to.');
+          break;
 
-      case ("add"):
-        console.log('Got an new membership activity');
-        try {
+        case ("add"):
+          console.log('Got an new membership activity');
           membership = {
             id: Buffer.from(
               'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
@@ -117,15 +112,12 @@ class EventPump {
           };
           console.log('Will tell client delete a userId: %s to room: %s',
             membership.personDisplayName, membership.roomId);
-        } catch(e) {
-          console.log('Failed getting data from event: '+e.message);
-        }
-        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
-        break;
-        
-      case ("leave"):
-        console.log('Got an membership deleted activity');
-        try {
+          (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
+            console.error('Missing callback for to send membership event to.');
+          break;
+          
+        case ("leave"):
+          console.log('Got an membership deleted activity');
           membership = {
             id: Buffer.from(
               'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
@@ -144,38 +136,41 @@ class EventPump {
           };
           console.log('Will tell client delete a userId: %s from room: %s',
             membership.personDisplayName, membership.roomId);
-        } catch(e) {
-          console.log('Failed getting data from event: '+e.message);
-        }
-        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
-        break;
+          (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
+            console.error('Missing callback for to send membership event to.');
+          break;
 
-      case ("acknowledge"):
-        console.log('Got an acknowledge activity');
-        membership = {
-          id: Buffer.from(
-            'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-          roomId: Buffer.from(
-            'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
-          personId: Buffer.from(
-            'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
-          personEmail: event.data.activity.actor.emailAddress,
-          personDisplayName: event.data.activity.actor.displayName,
-          personOrgId: Buffer.from(
-            'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
-          lastActivity: 'updated',
-          lastSeenId: Buffer.from(
-            'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
-          lastActivityDate: new Date(event.timestamp).toISOString()
-        };
-        (this.membershipEventCb) ? this.membershipEventCb(membership) : console.log('No app to send it to.');
-        break;
+        case ("acknowledge"):
+          console.log('Got an acknowledge activity');
+          membership = {
+            id: Buffer.from(
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
+            roomId: Buffer.from(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            personId: Buffer.from(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personEmail: event.data.activity.actor.emailAddress,
+            personDisplayName: event.data.activity.actor.displayName,
+            personOrgId: Buffer.from(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            lastActivity: 'updated',
+            lastSeenId: Buffer.from(
+              'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+            lastActivityDate: new Date(event.timestamp).toISOString()
+          };
+          (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
+            console.error('Missing callback for to send membership read receipt event to.');
+          break;
 
-      default:
-        console.log('Dont know what to do with activity type: '+ event.data.activity.verb);
+        default:
+          let msg = 'EventPump: Ignoring activity with verb type: '+ event.data.activity.verb;
+          (this.messageEventCb) ? this.messageEventCb(new Error(msg)) : console.error(msg);
+      }
+    } catch(e) {
+      let msg = 'EventPump: Failed getting data from event: '+e.message;
+      (this.messageEventCb) ? this.messageEventCb(e) : console.error(msg);
     }
   }
-
 
 }
 
