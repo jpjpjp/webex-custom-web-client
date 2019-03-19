@@ -95,3 +95,14 @@ This function will return object with an array of objects.  Each object will inc
 * lastSeenDate: the date of the last activity
 
 This array may **not** include lastSeen information on all members in the space.   If there is no information available on the last message that they read then no the lastSeen fields will not be included in the object.
+
+## Post Messages with File Attachments
+
+The file [sendFileMessage.js](.src/components/chat/sendFileMessage.js) implements a shim module which allows a custom JS client to post a message which includes a file attachment.   It provides a function called sendMessage with file which takes a message object which may contain the following:
+   *  roomId - required -- room to post message to
+   *  file - required -- a file specified via an HTML input type=file form
+   *  text - optional --  message text, this parameter is ignored if markdown is provided
+   *  markdown - optional -- markdown formatted text
+
+The Chat.js client has been crudely hacked to demonstrate the use of this.  In the bottom right hand corner is a button called "Browse", when the user browses to a file on the browsers file system, the sendFile method is called which calls the shim function with the file information returned by the browse button.  The GUI has NOT been implemented to support sending text and a file in the same message.  This is left as an ex exercise to the reader.
+

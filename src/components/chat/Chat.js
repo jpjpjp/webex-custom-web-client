@@ -19,7 +19,9 @@ var EventPump = require('./eventPump.js');
 // information on read status when loading a new room
 // NEW API
 var ReadInfo = require('./readInfo.js');
-
+// Create an object for sending messages with file attachme nts
+// NEW API
+var SendFileMessage = require('./sendFileMessage.js')
 
 // This class implements the main chat GUI and interfaces with webex
 class Chat extends React.Component {
@@ -55,6 +57,7 @@ class Chat extends React.Component {
       this.state.usePrivateInterfaces = true;  // SDK events generates callbacks
       this.state.eventPump = {}         // generate events from internal SDK interfaces  
       this.state.readInfo = {}          // talk to internal interfaces for read receipts
+      this.state.sendFileMessage = {}   // helper object to post messages with a file attachment
     } else {
       // This mode is not yet implemented
       alert('Sorry, this is not going to work');
@@ -120,6 +123,11 @@ class Chat extends React.Component {
         // Initialize our oject to send read reciepts
         let readInfo = new ReadInfo(token);
 
+        // NEW API call here
+        // Initialize our object to send messages with file attachments
+        let sendFileMessage = new SendFileMessage(token);
+
+
         let username = '';
         let user = null;
         // Get the webex person details for this user
@@ -131,6 +139,7 @@ class Chat extends React.Component {
             readInfo: readInfo,
             user: user,
             username: username,
+            sendFileMessage: sendFileMessage,
             teams: teams
           });
         }).then(() => {
@@ -254,13 +263,13 @@ class Chat extends React.Component {
   // ie: membership related functions in the Users class
   // message functions in the Messages class, etc
 
-/**
+ /**
    * Process a message that was typed in by our user
    *
    * @function sendMessage
    * @param {string} message - message text
    */
-  sendMessage(message, ) {
+  sendMessage(message) {
     console.log(message);
     // TODO encapsulate this in the read reciept logic better
     if (this.state.lookingState === 'back') {
@@ -269,7 +278,7 @@ class Chat extends React.Component {
       this.removeNewMessageIndicator()
     }
 
-    // Send the message to webex for distribution
+  // Send the "normal"message to webex for distribution
     this.state.teams.messages.create({
       roomId: this.state.roomId,
       text: message.text
@@ -277,6 +286,26 @@ class Chat extends React.Component {
       console.error(e.message);
       alert('Error sending message to webex!  (Check console)');
     });
+  }
+
+ /**
+   * Send a selected file as a message attachment
+   *
+   * @function sendMessage
+   * @param {object} fileInfo - file info returned from an html input type=file
+   */
+  sendFile(fileInfo) {
+    // NEW API
+    this.state.sendFileMessage.sendMessageWithFile({
+      roomId: this.state.roomId,
+      file: fileInfo
+      // The sendFileMessage parameter object may also
+      // include an optional 'text' or 'markdown' field
+      // it is simply not demonstrated in this basic Chat.js GUI
+    }).catch((e) => {
+      console.error(e.message);
+      alert('Error sending message with a file to webex!  (Check console)');
+    });  
   }
 
 /**
@@ -610,6 +639,9 @@ class Chat extends React.Component {
               isBack={this.isBack.bind(this)}
               messages={this.state.messages}
               lookingState={this.state.lookingState}
+            />
+            <input id="file-attachment" type="file" 
+              onInput={(event)=> {this.sendFile(event.target.files[0]).bind(this)}}
             />
           </React.Fragment>
         ) : (
