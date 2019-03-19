@@ -98,11 +98,11 @@ This array may **not** include lastSeen information on all members in the space.
 
 ## Post Messages with File Attachments
 
-The file [sendFileMessage.js](.src/components/chat/sendFileMessage.js) implements a shim module which allows a custom JS client to post a message which includes a file attachment.   It provides a function called sendMessage with file which takes a message object which may contain the following:
-   *  roomId - required -- room to post message to
-   *  file - required -- a file specified via an HTML input type=file form
-   *  text - optional --  message text, this parameter is ignored if markdown is provided
-   *  markdown - optional -- markdown formatted text
+It is not necessarily clear from the Webex JSSDK documentation that it is possible to post messages with an attachment that consists of a file on the browser's local file system.
 
-The Chat.js client has been crudely hacked to demonstrate the use of this.  In the bottom right hand corner is a button called "Browse", when the user browses to a file on the browsers file system, the sendFile method is called which calls the shim function with the file information returned by the browse button.  The GUI has NOT been implemented to support sending text and a file in the same message.  This is left as an ex exercise to the reader.
+The Chat.js client has been crudely hacked to demonstrate the use of this.  In the bottom left hand corner is a button called "Browse" which is implemented using the HTML form's "input" tag with the "type=file" attribute. When the user browses to a file on the browsers file system, the form data is sent to the sendFile method with an element that represents the selected file packaged in a way that allows the browser to stream this file from disk.  
+
+The sendFile method simply calls the SDK's native messages.create() function passing it a message object which includes the roomId and the file object passed as an array to the "files" element.  The SDK then posts this file to the space.   
+
+The GUI has NOT been implemented to support sending text and a file in the same message.  This is left as an exercise to the reader.
 
