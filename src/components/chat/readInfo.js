@@ -9,7 +9,7 @@ class ReadInfo {
   constructor(token) {
     this.token = token;
     this.ackOptions = {
-      "uri": 'https://conv-a.wbx2.com/conversation/api/v1/activities?personRefresh=true',
+      "uri": 'https://conv-a.wbx2.com/conversation/api/v1/activities',
       "method": 'POST',
       "json": true,
       headers: {
