@@ -38,8 +38,8 @@ class ReadInfo {
         }
       }
     };
-    this.fetchUri = 'https://conv-a.wbx2.com/conversation/api/v1/conversations/';
-    this.fetchOptions = {
+    this.spaceInfoUri = 'https://conv-a.wbx2.com/conversation/api/v1/conversations/';
+    this.spaceInfoOptions = {
       "method": 'GET',
       "json": true,
       headers: {
@@ -51,17 +51,90 @@ class ReadInfo {
         activitiesLimit: 0            // don't send the whole history of activity
       }
     };
+    this.readStatusOptions = {
+      "uri": 'https://conv-a.wbx2.com/conversation/api/v1/conversations/',
+      "method": 'GET',
+      "json": true,
+      headers: {
+        'Authorization': 'Bearer '+this.token,
+        'Accept': 'application/json'
+      },
+      qs: {
+        activitiesLimit: 0,     // don't send the whole history of activity
+        participantsLimit: 0 ,  // don't send participant detail
+        isActive: true,         // don't send info on "hidden" rooms                
+      }
+    };
+  }
+
+  /**
+   * Fetch the read status for all the rooms
+   *
+   * Returns an array of space info that includes
+   *   -- roomId - ID of the space 
+   *   -- lastSeenDate -- timestamp of last read receipt for user
+   *   -- lastActivityDate -- timestamp of last activity in space
+   * 
+   * For spaces where lastActivityDate > lastSeenDate the space
+   * can be considerd to be "unread"
+   *
+   * @function getReadStatus
+   */
+  getReadStatus() {
+    return (request(this.readStatusOptions).then(resp => {
+      let readStatusInfo = {items: []};
+      if ((resp) && (resp.items)) {
+        // Grab the couple of salient fields for the external array
+        for (let index in resp.items) {
+          let space = resp.items[index];
+          let spaceInfo = {};
+          if (space.id) {
+            spaceInfo.roomId = Buffer.from(
+              'ciscospark://us/ROOM/'+space.id).toString('base64').replace(/=*$/, "");
+            if (space.lastSeenActivityDate) {
+              spaceInfo.lastSeenDate = space.lastSeenActivityDate;
+            } else {
+              // If user has never been seen set the date to "a long time ago"
+              spaceInfo.lastSeenDate = new Date(0).toISOString();
+            }
+            if (space.lastReadableActivityDate) {
+              spaceInfo.lastActivityDate = space.lastReadableActivityDate;
+            } else {
+              if (space.lastRelevantActivityDate) {
+                spaceInfo.lastActivityDate = space.lastRelevantActivityDate;
+              } else {
+                console.error('getReadStatus: Cannot read last activity date for a space: '+spaceInfo.roomId+'.  Ignoring');
+                continue;
+              }
+            }
+          } else {
+            console.error('getReadStatus: Cannot get space ID.  Ignoring element');
+            continue;
+          }
+          readStatusInfo.items = readStatusInfo.items.concat(spaceInfo);
+        } 
+      }     
+      return Promise.resolve(readStatusInfo);
+    }).catch(err => {
+      console.log('Failed to fetch read status for spaces: '+err.message);
+      return Promise.reject(err);
+    }));
   }
 
   /**
    * Fetch the most recent activity info for each room participant
+   * 
+   * Returns an array of membership info that includes
+   *   -- personId - ID of the space member
+   *   -- lastSeenId -- ID of the last message read in space
+   *   -- lastSeenDate -- timestamp of last read receipt event
    *
    * @function getSpaceInfo
    * @param {string} roomId - ID of the space we are interested in
    */
   getSpaceInfo(roomId) {
-    this.fetchOptions.uri = this.fetchUri + this.getUUID(roomId);
-    return (request(this.fetchOptions).then(resp => {
+    this.spaceInfoOptions.uri = this.spaceInfoUri + this.getUUID(roomId);
+    return (request(this.spaceInfoOptions).then(resp => {
       console.log(resp);
       let lastReadInfo = {items: []};
       if ((resp) && (resp.participants) && (resp.participants.items)) {
@@ -87,7 +160,7 @@ class ReadInfo {
       }     
       return Promise.resolve(lastReadInfo);
     }).catch(err => {
-      alert('Failed to fetch read receipt info for new space: '+err.message);
+      console.log('Failed to fetch read receipt info for new space: '+err.message);
       return Promise.reject(err);
     }));
   }
@@ -106,7 +179,7 @@ class ReadInfo {
     request(this.ackOptions).then(resp => {
       console.log(resp);
     }).catch(err => {
-      alert('Failed to send read receipt to Webex: '+err.message);
+      console.error('Failed to send read receipt to Webex: '+err.message);
     });
   }
 

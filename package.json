@@ -9,6 +9,7 @@
     "express": "^4.15.2",
     "font-awesome": "^4.7.0",
     "jquery": "^3.3.1",
+    "moment": "^2.24.0",
     "popper.js": "^1.14.3",
     "react": "^16.4.0",
     "react-bootstrap": "^1.0.0-beta.5",
@@ -21,7 +22,8 @@
     "start": "node server.js",
     "dev-server": "nodemon server.js",
     "prod": "cross-env NODE_ENV=production webpack --config webpack.config.js",
-    "dev": "cross-env NODE_ENV=development webpack --config webpack.config.js"
+    "dev": "cross-env NODE_ENV=development webpack --config webpack.config.js",
+    "test": "node src/components/chat/test-readinfo.js"
   },
   "nodemonConfig": {
     "ignore": [

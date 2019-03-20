@@ -96,6 +96,23 @@ This function will return object with an array of objects.  Each object will inc
 
 This array may **not** include lastSeen information on all members in the space.   If there is no information available on the last message that they read then no the lastSeen fields will not be included in the object.
 
+## Get room read/unread status at startup
+
+When an app with a GUI that shows the user all available rooms starts up, it is useful to understand which of the rooms have messages or activity that has occurred since the last time the user looked at them.   The readInfo module provides a function getReadStatus for this purpose.
+
+The function takes no parameters and will return an object with an item list.  Each item will contain the following elements
+   * roomId - ID of the space 
+   * lastSeenDate -- timestamp of last read receipt for user
+   * lastActivityDate -- timestamp of last activity in space
+
+An app could use this to differentiate between the list of spaces that have unread messages in them from spaces that have no unread messages.    This sample does NOT provide a GUI that does this but there is a command line test application [test-readInfo.js](.src/components/chat/test-readInfo.js) that demonstrates how an app could use this functionality.
+
+To run the test application set an environment variable WEBEX_TOKEN to a valid webex user's auth token.  Then run:
+
+`npm run test`
+
+The sample first calls the method and provides statistics on the number of read and unread rooms that the user is in.  It then registers callbacks for the events exposed in the EventPump module.  When a message updated event is received, the sample uses this to update the lastSeenDate and lastActivityDate associated with the room.  A GUI app would use similar logic to keep the read/unread status of the user's rooms up to date.
+
 ## Post Messages with File Attachments
 
 It is not necessarily clear from the Webex JSSDK documentation that it is possible to post messages with an attachment that consists of a file on the browser's local file system.
