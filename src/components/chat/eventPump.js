@@ -4,10 +4,11 @@
 // to the public webhooks
 
 class EventPump {
-  constructor(teams, messageEventCb, membershipEventCb) {
+  constructor(teams, messageEventCb, membershipEventCb, roomEventCb) {
     try {
       this.messageEventCb =  (messageEventCb instanceof Function) ? messageEventCb : null;
       this.membershipEventCb =  (membershipEventCb instanceof Function) ? membershipEventCb : null;
+      this.roomEventCb =  (roomEventCb instanceof Function) ? roomEventCb : null;
 
       // Register to get SDK Internal events
       teams.internal.device.register();
@@ -36,6 +37,7 @@ class EventPump {
 
       let membership = {};
       let message = {};
+      let room = {};
       switch(event.data.activity.verb) {
         case ("post"):
         case ("share"):
@@ -60,7 +62,7 @@ class EventPump {
             lastActivity: 'created',
             lastActivityDate:  new Date(event.timestamp).toISOString()
           };
-          console.log('Will tell client to fetch message ID: %s from room: %s',message.id, message.roomId);
+          console.log('Will tell client to fetch message ID: '+message.id+' from room: '+message.roomId);
           (this.messageEventCb) ? this.messageEventCb(null, message) : 
             console.error('Missing callback for to send message event to.');
           break;
@@ -86,7 +88,7 @@ class EventPump {
             lastActivity: 'deleted',
             lastActivityDate:  new Date(event.timestamp).toISOString() 
           };
-          console.log('Will tell client to delete message ID: %s from room: %s',message.id, message.roomId);
+          console.log('Will tell client to delete message ID: '+message.id+' from room: '+message.roomId);
           (this.messageEventCb) ? this.messageEventCb(null, message) : 
             console.error('Missing callback for to send message event to.');
           break;
@@ -110,8 +112,8 @@ class EventPump {
             lastActivity: 'created',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
-          console.log('Will tell client delete a userId: %s to room: %s',
-            membership.personDisplayName, membership.roomId);
+          console.log('Will tell client add a user: '+membership.personDisplayName+' to room: '+
+            membership.roomId);
           (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
             console.error('Missing callback for to send membership event to.');
           break;
@@ -134,8 +136,8 @@ class EventPump {
             lastActivity: 'deleted',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
-          console.log('Will tell client delete a userId: %s from room: %s',
-            membership.personDisplayName, membership.roomId);
+          console.log('Will tell client delete a user: '+membership.personDisplayName+' from room: '+
+            membership.roomId);
           (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
             console.error('Missing callback for to send membership event to.');
           break;
@@ -162,13 +164,32 @@ class EventPump {
             console.error('Missing callback for to send membership read receipt event to.');
           break;
 
+        case ("create"):
+          console.log('Got an new room activity');
+          room = {
+            id: Buffer.from(
+              'ciscospark://us/ROOM/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+            // title: not clear how to get this from activity  
+            // type: not clear how to get this from activity
+            // isLocked: not clear how to get this from activity
+            // teamId: not clear how to get this from activity
+            creatorId: Buffer.from(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            lastActivity: 'created',
+            lastActivityDate: new Date(event.timestamp).toISOString()
+          };
+          console.log('Will tell client that their user is in a new room with id: '+room.id);
+          (this.roomEventCb) ? this.roomEventCb(null, room) : 
+            console.error('Missing callback for room events.');
+          break;
+          
         default:
           let msg = 'EventPump: Ignoring activity with verb type: '+ event.data.activity.verb;
           (this.messageEventCb) ? this.messageEventCb(new Error(msg)) : console.error(msg);
       }
     } catch(e) {
       let msg = 'EventPump: Failed getting data from event: '+e.message;
-      (this.messageEventCb) ? this.messageEventCb(e) : console.error(msg);
+      (this.messageEventCb) ? this.messageEventCb(new Error(msg)) : console.error(msg);
     }
   }
 

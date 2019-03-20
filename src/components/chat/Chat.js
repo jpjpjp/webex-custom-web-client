@@ -14,11 +14,11 @@ import { AssertionError } from 'assert';
 
 // Create the object for generating client side events
 // NEW API
-var EventPump = require('./eventPump.js');
+var EventPump = require('webex-js-eventpump');
 // Create an object for sending read receipts and getting
 // information on read status when loading a new room
 // NEW API
-var ReadInfo = require('./readInfo.js');
+var ReadInfo = require('webex-read-info');
 
 // This class implements the main chat GUI and interfaces with webex
 class Chat extends React.Component {
@@ -110,7 +110,8 @@ class Chat extends React.Component {
         if (this.state.usePrivateInterfaces) {
           eventPump = new EventPump(teams, 
             this.processMessageEvent.bind(this),
-            this.processMembershipEvent.bind(this));
+            this.processMembershipEvent.bind(this),
+            this.processRoomEvent.bind(this));
         } else {
           alert('Sorry this mode is not built yet.');
         }
@@ -368,7 +369,34 @@ class Chat extends React.Component {
   };
 }
 
-
+/**
+   * Process incoming room events sent by our eventPump 
+   * NEW API -- we registered handler when we initialized 
+   * the event pump
+   * 
+   * This happens when our user creates a room, or another
+   * user creates one and includes us
+   * 
+   * Our GUI does not show rooms so we'll simply put up an alert
+   *
+   * @function processRoomEvent
+   * @param {object} room - room event payload
+   */
+  processRoomEvent(e, room) {
+    try {
+      if (e) {
+        console.error('Error processing Webex Event: '+e.message);
+        return;
+      }
+      this.state.teams.rooms.get(room.id).then(newRoom => {
+        alert('A new room: "'+newRoom.title+'" was created with you in it. Just FYI...');
+      }).catch(e => {
+        console.error('Error looking up title for room that got a read activity: '+e.message);
+      });
+    } catch(e) {
+      alert('Got notified of a room event, but cannot get it: '+e.message);
+    };
+  }
 
 /**
  * Process an incoming new message event
