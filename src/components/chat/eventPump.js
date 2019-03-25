@@ -2,6 +2,7 @@
 // Abstraction layer for handling internal Webex events
 // and calling registered callbacks with data that aligns
 // to the public webhooks
+const b64 = require('base-64');
 
 class EventPump {
   constructor(teams, messageEventCb, membershipEventCb, roomEventCb) {
@@ -45,17 +46,17 @@ class EventPump {
           // Message is encrypted.  We'll just send the message ID
           // so the client can GET the full unencyrpted message object
           message = {
-            id: Buffer.from(
-              'ciscospark://us/MESSAGE/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-            roomId: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/MESSAGE/'+event.data.activity.id),
+            roomId: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id),
             // Not clear how to get roomType from Activity data  
-            personId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.disaplayName,
-            personOrgId: Buffer.from(
-              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            personOrgId: b64.encode(
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId),
             // Not clear how to get isModerator from Activity data
             // Not clear how to get isMonitor from Activity data
             // Not clear how to get isRoomHidden from Activity data
@@ -71,17 +72,17 @@ class EventPump {
         case ("tombstone"):     // Its not clear what the difference is between these two
           console.log('Got an delete message activity');
           message = {
-            id: Buffer.from(
-              'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
-            roomId: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/MESSAGE/'+event.data.activity.object.id),
+            roomId: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id),
             // Not clear how to get roomType from Activity data  
-            personId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.disaplayName,
-            personOrgId: Buffer.from(
-              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            personOrgId: b64.encode(
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId),
             // Not clear how to get isModerator from Activity data
             // Not clear how to get isMonitor from Activity data
             // Not clear how to get isRoomHidden from Activity data
@@ -96,19 +97,19 @@ class EventPump {
         case ("add"):
           console.log('Got an new membership activity');
           membership = {
-            id: Buffer.from(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-            roomId: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+            roomId: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id),
             // roomType: not clear how to get this from activity
-            personId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).toString('base64').replace(/=*$/, ""),
+            personId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
             personEmail: event.data.activity.object.emailAddress,
             personDisplayName: event.data.activity.object.displayName,
-            personOrgId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).toString('base64').replace(/=*$/, ""),
-            actorId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personOrgId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
+            actorId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             lastActivity: 'created',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
@@ -121,18 +122,18 @@ class EventPump {
         case ("leave"):
           console.log('Got an membership deleted activity');
           membership = {
-            id: Buffer.from(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-            roomId: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
-            personId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+            roomId: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+            personId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
             personEmail: event.data.activity.object.emailAddress,
             personDisplayName: event.data.activity.object.displayName,
-            personOrgId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.orgId).toString('base64').replace(/=*$/, ""),
-            actorId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            personOrgId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.orgId),
+            actorId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             lastActivity: 'deleted',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
@@ -145,19 +146,19 @@ class EventPump {
         case ("acknowledge"):
           console.log('Got an acknowledge activity');
           membership = {
-            id: Buffer.from(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).toString('base64').replace(/=*$/, ""),
-            roomId: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id).toString('base64').replace(/=*$/, ""),
-            personId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+            roomId: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+            personId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.displayName,
-            personOrgId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).toString('base64').replace(/=*$/, ""),
+            personOrgId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId),
             lastActivity: 'updated',
-            lastSeenId: Buffer.from(
-              'ciscospark://us/MESSAGE/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+            lastSeenId: b64.encode(
+              'ciscospark://us/MESSAGE/'+event.data.activity.object.id),
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
           (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
@@ -167,14 +168,14 @@ class EventPump {
         case ("create"):
           console.log('Got an new room activity');
           room = {
-            id: Buffer.from(
-              'ciscospark://us/ROOM/'+event.data.activity.object.id).toString('base64').replace(/=*$/, ""),
+            id: b64.encode(
+              'ciscospark://us/ROOM/'+event.data.activity.object.id),
             // title: not clear how to get this from activity  
             // type: not clear how to get this from activity
             // isLocked: not clear how to get this from activity
             // teamId: not clear how to get this from activity
-            creatorId: Buffer.from(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).toString('base64').replace(/=*$/, ""),
+            creatorId: b64.encode(
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
             lastActivity: 'created',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };

@@ -7,6 +7,7 @@ var webexSdk = require('ciscospark');
 var EventPump = require('webex-js-eventpump');
 var ReadInfo = require('webex-read-info');
 var moment = require('moment');
+require('dotenv').config();
 
 // Read token from env
 let token = '';
@@ -42,7 +43,7 @@ async function kickOffApp(token, myAppInfo) {
   teams.people.get('me').then((me) => {
     myAppInfo.myPersonId = me.id;
   }).catch(e => {
-    console.error('Cannot get user details.  Bye!');
+    console.error('Cannot get user details: '+e.message);
     process.exit();
   });
 
@@ -65,7 +66,7 @@ async function kickOffApp(token, myAppInfo) {
     let firstRead = '';
     for (let index in roomStates.items) {
       let roomState = roomStates.items[index];
-      if (moment(roomState.lastActivityDate,moment.ISO_8601).valueOf() >
+	    if (moment(roomState.lastActivityDate,moment.ISO_8601).valueOf() >
         moment(roomState.lastSeenDate,moment.ISO_8601).valueOf()) 
       {
         unReadCount += 1;
@@ -225,6 +226,4 @@ function waitForKill(){
     waitForKill();
   }, 60000);
 }
-
-
 

@@ -2,7 +2,8 @@
 // Abstraction layer for sending activity events
 // and getting member activity info for a space
 
-const request = require('request-promise');
+const request = require('request');
+const b64 = require('base-64');
 
 
 class ReadInfo {
@@ -13,27 +14,27 @@ class ReadInfo {
       "method": 'POST',
       "json": true,
       headers: {
-        'Authorization': 'Bearer '+this.token,
+        'Authorization': 'Bearer ' + this.token,
         'Content-Type': 'application/json'
       },
       body: {
-        "verb":"acknowledge",
-        "objectType":"activity",
-        "actor":{
-          "entryUUID":""
+        "verb": "acknowledge",
+        "objectType": "activity",
+        "actor": {
+          "entryUUID": ""
         },
-        "object":{
-          "objectType":"activity",
-          "id":""
+        "object": {
+          "objectType": "activity",
+          "id": ""
         },
-        "target":{
-          "id":"",
-          "objectType":"conversation",
-          "activities":{
-            "items":[]
+        "target": {
+          "id": "",
+          "objectType": "conversation",
+          "activities": {
+            "items": []
           },
-          "participants":{
-            "items":[]
+          "participants": {
+            "items": []
           }
         }
       }
@@ -43,7 +44,7 @@ class ReadInfo {
       "method": 'GET',
       "json": true,
       headers: {
-        'Authorization': 'Bearer '+this.token,
+        'Authorization': 'Bearer ' + this.token,
         'Accept': 'application/json'
       },
       qs: {
@@ -56,12 +57,12 @@ class ReadInfo {
       "method": 'GET',
       "json": true,
       headers: {
-        'Authorization': 'Bearer '+this.token,
+        'Authorization': 'Bearer ' + this.token,
         'Accept': 'application/json'
       },
       qs: {
         activitiesLimit: 0,     // don't send the whole history of activity
-        participantsLimit: 0 ,  // don't send participant detail
+        participantsLimit: 0,  // don't send participant detail
         isActive: true,         // don't send info on "hidden" rooms                
       }
     };
@@ -81,44 +82,54 @@ class ReadInfo {
    * @function getReadStatus
    */
   getReadStatus() {
-    return (request(this.readStatusOptions).then(resp => {
-      let readStatusInfo = {items: []};
-      if ((resp) && (resp.items)) {
-        // Grab the couple of salient fields for the external array
-        for (let index in resp.items) {
-          let space = resp.items[index];
-          let spaceInfo = {};
-          if (space.id) {
-            spaceInfo.roomId = Buffer.from(
-              'ciscospark://us/ROOM/'+space.id).toString('base64').replace(/=*$/, "");
-            if (space.lastSeenActivityDate) {
-              spaceInfo.lastSeenDate = space.lastSeenActivityDate;
-            } else {
-              // If user has never been seen set the date to "a long time ago"
-              spaceInfo.lastSeenDate = new Date(0).toISOString();
-            }
-            if (space.lastReadableActivityDate) {
-              spaceInfo.lastActivityDate = space.lastReadableActivityDate;
-            } else {
-              if (space.lastRelevantActivityDate) {
-                spaceInfo.lastActivityDate = space.lastRelevantActivityDate;
+    return new Promise((resolve, reject) => {
+      request(this.readStatusOptions, function (error, resp) {
+        try {
+          if (error) {throw(error);}
+          if (resp.statusCode != 200) {
+            throw(new Error('getReadStatus: lookup returned '+resp.statusCode+
+              ': '+resp.statusMessage));
+          }
+          let readStatusInfo = {items: []};
+          // Grab the couple of salient fields for the external array
+          if ((resp) && (resp.body) && (resp.body.items)) {
+            for (let index in resp.body.items) {
+              let space = resp.body.items[index];
+              let spaceInfo = {};
+              if (space.id) {
+                spaceInfo.roomId = b64.encode('ciscospark://us/ROOM/'+space.id);            
+                if (space.lastSeenActivityDate) {
+                  spaceInfo.lastSeenDate = space.lastSeenActivityDate;
+                } else {
+                  // If user has never been seen set the date to "a long time ago"
+                  spaceInfo.lastSeenDate = new Date(0).toISOString();
+                }
+                if (space.lastReadableActivityDate) {
+                  spaceInfo.lastActivityDate = space.lastReadableActivityDate;
+                } else {
+                  if (space.lastRelevantActivityDate) {
+                    spaceInfo.lastActivityDate = space.lastRelevantActivityDate;
+                  } else {
+                    console.error('getReadStatus: Cannot read last activity date for a space: '+spaceInfo.roomId+'.  Ignoring');
+                    continue;
+                  }
+                }
               } else {
-                console.error('getReadStatus: Cannot read last activity date for a space: '+spaceInfo.roomId+'.  Ignoring');
+                console.error('getReadStatus: Cannot get space ID.  Ignoring element');
                 continue;
               }
+              readStatusInfo.items = readStatusInfo.items.concat(spaceInfo);
             }
           } else {
-            console.error('getReadStatus: Cannot get space ID.  Ignoring element');
-            continue;
-          }
-          readStatusInfo.items = readStatusInfo.items.concat(spaceInfo);
-        } 
-      }     
-      return Promise.resolve(readStatusInfo);
-    }).catch(err => {
-      console.log('Failed to fetch read status for spaces: '+err.message);
-      return Promise.reject(err);
-    }));
+            throw new Error('getReadStatus: Unable to parse response from Webex');
+          }     
+          return resolve(readStatusInfo);
+        } catch(err)  {
+          console.error('Failed to fetch read status for spaces: '+err.message);
+          return reject(err);
+        };
+      });
+    });
   }
 
   /**
@@ -134,35 +145,45 @@ class ReadInfo {
    */
   getSpaceInfo(roomId) {
     this.spaceInfoOptions.uri = this.spaceInfoUri + this.getUUID(roomId);
-    return (request(this.spaceInfoOptions).then(resp => {
-      console.log(resp);
-      let lastReadInfo = {items: []};
-      if ((resp) && (resp.participants) && (resp.participants.items)) {
-        // We keep track of the last read message by each user
-        for (let index in resp.participants.items) {
-          let participant = resp.participants.items[index];
-          let participantInfo = {};
-          if (participant.entryUUID) {
-            participantInfo.personId = Buffer.from(
-              'ciscospark://us/PEOPLE/'+participant.entryUUID).toString('base64').replace(/=*$/, "");
+    return new Promise((resolve, reject) => {
+      request(this.spaceInfoOptions, function (error, resp) {
+        try{
+          console.log(resp);
+          if (error) {throw(error);}
+          if (resp.statusCode != 200) {
+            throw(new Error('getSpaceInfo: lookup returned '+resp.statusCode+
+              ': '+resp.statusMessage));
           }
-          if (participant.roomProperties) {
-            if (participant.roomProperties.lastSeenActivityUUID) {
-              participantInfo.lastSeenId = Buffer.from(
-                'ciscospark://us/MESSAGE/'+participant.roomProperties.lastSeenActivityUUID).toString('base64').replace(/=*$/, "");
-            }
-            if (participant.roomProperties.lastSeenActivityDate) {
-              participantInfo.lastSeenDate = participant.roomProperties.lastSeenActivityDate;
+          let lastReadInfo = { items: [] };
+          if ((resp) && (resp.participants) && (resp.participants.items)) {
+            // We keep track of the last read message by each user
+            for (let index in resp.participants.items) {
+              let participant = resp.participants.items[index];
+              let participantInfo = {};
+              if (participant.entryUUID) {
+                participantInfo.personId = b64.encode(
+                  'ciscospark://us/PEOPLE/' + participant.entryUUID);
+              }
+
+              if (participant.roomProperties) {
+                if (participant.roomProperties.lastSeenActivityUUID) {
+                  participantInfo.lastSeenId = b64.encode(
+                    'ciscospark://us/MESSAGE/' + participant.roomProperties.lastSeenActivityUUID);
+                }
+                if (participant.roomProperties.lastSeenActivityDate) {
+                  participantInfo.lastSeenDate = participant.roomProperties.lastSeenActivityDate;
+                }
+              }
+              lastReadInfo.items = lastReadInfo.items.concat(participantInfo);
             }
           }
-          lastReadInfo.items = lastReadInfo.items.concat(participantInfo);
-        } 
-      }     
-      return Promise.resolve(lastReadInfo);
-    }).catch(err => {
-      console.log('Failed to fetch read receipt info for new space: '+err.message);
-      return Promise.reject(err);
-    }));
+          return resolve(lastReadInfo);
+        }catch(err) {
+          console.log('Failed to fetch read receipt info for new space: ' + err.message);
+          return reject(err);
+        }
+      });
+    });
   }
 
   /**
@@ -176,10 +197,17 @@ class ReadInfo {
     this.ackOptions.body.actor.id = this.getUUID(personId);
     this.ackOptions.body.object.id = this.getUUID(messageId);
     this.ackOptions.body.target.id = this.getUUID(roomId);
-    request(this.ackOptions).then(resp => {
-      console.log(resp);
-    }).catch(err => {
-      console.error('Failed to send read receipt to Webex: '+err.message);
+    request(this.ackOptions, function (error, resp) {
+      try {
+        if (error) {throw(error);}
+        console.log(resp);
+        if (resp.statusCode != 200) {
+          throw(new Error('sendReadReciept: returned '+resp.statusCode+
+            ': '+resp.statusMessage));
+        }
+      } catch(err) {
+        console.error('Failed to send read receipt to Webex: ' + err.message);
+      }
     });
   }
 
@@ -191,8 +219,8 @@ class ReadInfo {
    * @param {string} id - Public ID to extract from
    */
   getUUID(id) {
-    let internalId = Buffer.from(id, 'base64').toString('utf8');
-    return(internalId.substr(internalId.lastIndexOf("/")+1));
+    let internalId = b64.decode(id);
+    return (internalId.substr(internalId.lastIndexOf("/") + 1));
   }
 }
 
