@@ -97,7 +97,8 @@ class ReadInfo {
               let space = resp.body.items[index];
               let spaceInfo = {};
               if (space.id) {
-                spaceInfo.roomId = b64.encode('ciscospark://us/ROOM/'+space.id);            
+                spaceInfo.roomId = 
+                  b64.encode('ciscospark://us/ROOM/'+space.id).replace(/=*$/, "");         
                 if (space.lastSeenActivityDate) {
                   spaceInfo.lastSeenDate = space.lastSeenActivityDate;
                 } else {
@@ -148,27 +149,27 @@ class ReadInfo {
     return new Promise((resolve, reject) => {
       request(this.spaceInfoOptions, function (error, resp) {
         try{
-          console.log(resp);
           if (error) {throw(error);}
           if (resp.statusCode != 200) {
             throw(new Error('getSpaceInfo: lookup returned '+resp.statusCode+
               ': '+resp.statusMessage));
           }
           let lastReadInfo = { items: [] };
-          if ((resp) && (resp.participants) && (resp.participants.items)) {
+          if ((resp) && (resp.body) && (resp.body.participants) && (resp.body.participants.items)) {
             // We keep track of the last read message by each user
-            for (let index in resp.participants.items) {
-              let participant = resp.participants.items[index];
+            let particpants = resp.body.participants.items;
+            for (let index in particpants) {
+              let participant = particpants[index];
               let participantInfo = {};
               if (participant.entryUUID) {
                 participantInfo.personId = b64.encode(
-                  'ciscospark://us/PEOPLE/' + participant.entryUUID);
+                  'ciscospark://us/PEOPLE/' + participant.entryUUID).replace(/=*$/, "");
               }
 
               if (participant.roomProperties) {
                 if (participant.roomProperties.lastSeenActivityUUID) {
                   participantInfo.lastSeenId = b64.encode(
-                    'ciscospark://us/MESSAGE/' + participant.roomProperties.lastSeenActivityUUID);
+                    'ciscospark://us/MESSAGE/' + participant.roomProperties.lastSeenActivityUUID).replace(/=*$/, "");
                 }
                 if (participant.roomProperties.lastSeenActivityDate) {
                   participantInfo.lastSeenDate = participant.roomProperties.lastSeenActivityDate;
@@ -179,7 +180,7 @@ class ReadInfo {
           }
           return resolve(lastReadInfo);
         }catch(err) {
-          console.log('Failed to fetch read receipt info for new space: ' + err.message);
+          console.error('Failed to fetch read receipt info for new space: ' + err.message);
           return reject(err);
         }
       });
@@ -200,7 +201,6 @@ class ReadInfo {
     request(this.ackOptions, function (error, resp) {
       try {
         if (error) {throw(error);}
-        console.log(resp);
         if (resp.statusCode != 200) {
           throw(new Error('sendReadReciept: returned '+resp.statusCode+
             ': '+resp.statusMessage));

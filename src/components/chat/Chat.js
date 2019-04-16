@@ -65,8 +65,6 @@ class Chat extends React.Component {
   }
 
   // Uncomment to skip login during debugging
-  // componentDidMount() {
-  //   this.setUserKey({
   //     roomId: "RoomID you want to use for debugging",
   //     token: "Token for user you will use for debugging"
   //   });
@@ -97,7 +95,7 @@ class Chat extends React.Component {
         }
       }));
 
-      if (teams) {
+      if ((teams) && (teams.canAuthorize)) {
         // NEW API call here
         // Initialize our event pump with the methods to call for each event type
 

@@ -29,7 +29,6 @@ class EventPump {
    */
   processEvent(event) {
     try {
-      console.log(event);
       if ((!event) || (!event.data) || (!event.data.activity) || (!event.data.activity.verb)) {
         let msg = 'EventPump: Received event with no activity verb to process, ignoring';
         (this.messageEventCb) ? this.messageEventCb(new Error(msg)) : console.error(msg);
@@ -47,16 +46,16 @@ class EventPump {
           // so the client can GET the full unencyrpted message object
           message = {
             id: b64.encode(
-              'ciscospark://us/MESSAGE/'+event.data.activity.id),
+              'ciscospark://us/MESSAGE/'+event.data.activity.id).replace(/=*$/, ""),
             roomId: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).replace(/=*$/, ""),
             // Not clear how to get roomType from Activity data  
             personId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.disaplayName,
             personOrgId: b64.encode(
-              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId),
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).replace(/=*$/, ""),
             // Not clear how to get isModerator from Activity data
             // Not clear how to get isMonitor from Activity data
             // Not clear how to get isRoomHidden from Activity data
@@ -73,16 +72,16 @@ class EventPump {
           console.log('Got an delete message activity');
           message = {
             id: b64.encode(
-              'ciscospark://us/MESSAGE/'+event.data.activity.object.id),
+              'ciscospark://us/MESSAGE/'+event.data.activity.object.id).replace(/=*$/, ""),
             roomId: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).replace(/=*$/, ""),
             // Not clear how to get roomType from Activity data  
             personId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.disaplayName,
             personOrgId: b64.encode(
-              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId),
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.actor.orgId).replace(/=*$/, ""),
             // Not clear how to get isModerator from Activity data
             // Not clear how to get isMonitor from Activity data
             // Not clear how to get isRoomHidden from Activity data
@@ -98,18 +97,18 @@ class EventPump {
           console.log('Got an new membership activity');
           membership = {
             id: b64.encode(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).replace(/=*$/, ""),
             roomId: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).replace(/=*$/, ""),
             // roomType: not clear how to get this from activity
             personId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).replace(/=*$/, ""),
             personEmail: event.data.activity.object.emailAddress,
             personDisplayName: event.data.activity.object.displayName,
             personOrgId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
+              'ciscospark://us/ORGANIZATION/'+event.data.activity.object.orgId).replace(/=*$/, ""),
             actorId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             lastActivity: 'created',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
@@ -123,17 +122,17 @@ class EventPump {
           console.log('Got an membership deleted activity');
           membership = {
             id: b64.encode(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).replace(/=*$/, ""),
             roomId: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).replace(/=*$/, ""),
             personId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.object.entryUUID).replace(/=*$/, ""),
             personEmail: event.data.activity.object.emailAddress,
             personDisplayName: event.data.activity.object.displayName,
             personOrgId: b64.encode(
               'ciscospark://us/PEOPLE/'+event.data.activity.object.orgId),
             actorId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             lastActivity: 'deleted',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
@@ -147,18 +146,18 @@ class EventPump {
           console.log('Got an acknowledge activity');
           membership = {
             id: b64.encode(
-              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id),
+              'ciscospark://us/MEMBERSHIP/'+event.data.activity.id).replace(/=*$/, ""),
             roomId: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.target.id),
+              'ciscospark://us/ROOM/'+event.data.activity.target.id).replace(/=*$/, ""),
             personId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             personEmail: event.data.activity.actor.emailAddress,
             personDisplayName: event.data.activity.actor.displayName,
             personOrgId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.orgId).replace(/=*$/, ""),
             lastActivity: 'updated',
             lastSeenId: b64.encode(
-              'ciscospark://us/MESSAGE/'+event.data.activity.object.id),
+              'ciscospark://us/MESSAGE/'+event.data.activity.object.id).replace(/=*$/, ""),
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
           (this.membershipEventCb) ? this.membershipEventCb(null, membership) : 
@@ -169,13 +168,13 @@ class EventPump {
           console.log('Got an new room activity');
           room = {
             id: b64.encode(
-              'ciscospark://us/ROOM/'+event.data.activity.object.id),
+              'ciscospark://us/ROOM/'+event.data.activity.object.id).replace(/=*$/, ""),
             // title: not clear how to get this from activity  
             // type: not clear how to get this from activity
             // isLocked: not clear how to get this from activity
             // teamId: not clear how to get this from activity
             creatorId: b64.encode(
-              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID),
+              'ciscospark://us/PEOPLE/'+event.data.activity.actor.entryUUID).replace(/=*$/, ""),
             lastActivity: 'created',
             lastActivityDate: new Date(event.timestamp).toISOString()
           };
