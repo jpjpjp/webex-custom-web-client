@@ -6,7 +6,6 @@
     "axios": "^0.18.0",
     "babel-polyfill": "^6.26.0",
     "bootstrap": "^4.3.1",
-    "ciscospark": "^1.50.20",
     "dotenv": "^7.0.0",
     "express": "^4.15.2",
     "font-awesome": "^4.7.0",
@@ -19,6 +18,7 @@
     "request": "^2.88.0",
     "request-promise": "^4.2.4",
     "socket.io": "^1.7.3",
+    "webex": "^1.60.2",
     "webex-js-eventpump": "^1.0.4",
     "webex-read-info": "^1.0.2"
   },
