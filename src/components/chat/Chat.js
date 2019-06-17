@@ -8,9 +8,8 @@ import React from 'react';
 import Users from "./Users";
 import Messages from "./Messages";
 import EnterChat from "./EnterChat";
-import socketIOClient from 'socket.io-client';
-import { init as initTeams } from 'ciscospark';
-import { AssertionError } from 'assert';
+// The Webex JS SDK was renamed from "ciscospark" to "webex"
+import { init as initTeams } from 'webex';
 
 // Create the object for generating client side events
 // NEW API
@@ -25,11 +24,6 @@ class Chat extends React.Component {
 
   constructor(props) {
     super(props);
-
-    // Toggle between webhook private interface and 
-    // read receipt+webhook server modes which uses all publice interfaces
-    // NOTE:  The webhook server approach has NOT been implemented yet
-    let usePrivateInterfaces = true;
 
     // These elements are used in both modes
     this.state = {
@@ -50,25 +44,13 @@ class Chat extends React.Component {
       roomId: ''                // Webex Teams Space that will power this chat
     }
 
-    if (usePrivateInterfaces) {
-      this.state.usePrivateInterfaces = true;  // SDK events generates callbacks
-      this.state.eventPump = {}         // generate events from internal SDK interfaces  
-      this.state.readInfo = {}          // talk to internal interfaces for read receipts
-    } else {
-      // This mode is not yet implemented
-      alert('Sorry, this is not going to work');
-      this.state.usePrivateInterfaces = false;  // webhook server generates callbacks
-      this.socket = null;       
-      this.state.uid = localStorage.getItem('uid') ? localStorage.getItem('uid') : this.generateUID();
-    }
+    // Uncomment to skip login during debugging
+    // this.setUserKey({
+    //     roomId: "RoomID you want to use for debugging",
+    //     token: "Token for user you will use for debugging"
+    // });
 
   }
-
-  // Uncomment to skip login during debugging
-  //     roomId: "RoomID you want to use for debugging",
-  //     token: "Token for user you will use for debugging"
-  //   });
-  // }
 
 
   /**
@@ -96,27 +78,68 @@ class Chat extends React.Component {
       }));
 
       if ((teams) && (teams.canAuthorize)) {
-        // NEW API call here
-        // Initialize our event pump with the methods to call for each event type
+        // We use the new webex SDK events feature to 
+        // register for message, membership and room events
+        // This replaces the functionality previously provided
+        // by the eventPump "shim"
+        teams.messages.listen()
+        .then(() => {
+          console.log('listening to message events');
+          teams.messages.on('created', async (message) => {
+            console.log('message created event:');
+            console.log(message);
+            await this.messageCreated(message.data);
+            this.scrollToBottom();
+          });
+          teams.messages.on('deleted', (message) => {
+            console.log('message deleted event:');
+            console.log(message);
+            this.messageDeleted(message.data);
+          });
+        })
+        .catch((err) => {
+          console.error(`error listening to messages: ${err}`);
+          alert('Couldnt initialize user! (Check the console)');
+        });
+        teams.memberships.listen()
+        .then(() => {
+          console.log('listening to membership events');
+          teams.memberships.on('created', (membership) => {
+            console.log('membership created event');
+            console.log(membership);
+            this.membershipCreated(membership.data);
+          });
+          teams.memberships.on('deleted', (membership) => {
+            console.log('membership deleted event');
+            console.log(membership);
+            this.membershipDeleted(membership.data);
+          });
+          teams.memberships.on('seen', (membership) => {
+            console.log('membership seen (read receipt) event');
+            console.log(membership);
+            this.readReceipt(membership.data);
+          });
+          teams.memberships.on('updated', () => {
+            console.log('Igoring membership:updated event.  This is usually a change in moderator status.');
+          });
+        })
+        .catch((err) => {
+          console.error(`error listening to memberships: ${err}`);
+          alert('Couldnt initialize user! (Check the console)');
+        });
+      // Register for room events
+      teams.rooms.listen()
+        .then(() => {
+          console.log('listening to room events');
+          teams.rooms.on('updated', () => {
+            console.log('Ignoring a room updated event.  This usually means the room title changed.');
+          });
+        })
+        .catch((err) => {
+          console.error(`error listening to rooms: ${err}`);
+          updateStatus(false);
+        });
 
-        // TODO consider if this should happen here or AFTER we query
-        // for the room membership and message details
-        // A real app must consider that events that occur while 
-        // we are doing the initial webex space setup may show up twice:
-        // once in our event queue, and again when we poll for space info
-        let eventPump = {};
-        if (this.state.usePrivateInterfaces) {
-          eventPump = new EventPump(teams, 
-            this.processMessageEvent.bind(this),
-            this.processMembershipEvent.bind(this),
-            this.processRoomEvent.bind(this));
-        } else {
-          alert('Sorry this mode is not built yet.');
-        }
-
-        // NEW API call here
-        // Initialize our oject to send read reciepts
-        let readInfo = new ReadInfo(token);
 
         let username = '';
         let user = null;
@@ -125,8 +148,6 @@ class Chat extends React.Component {
           user = userObj;
           user.displayName ? username = user.displayName : username = user.firstName + ' '+ user.lasName;
           return this.setState({
-            eventPump: eventPump,
-            readInfo: readInfo,
             user: user,
             username: username,
             teams: teams
@@ -163,16 +184,21 @@ class Chat extends React.Component {
     let messages = [];
     let lastMsgId = '';
     let lastReadById = []  // maintain last read state per space member
+    
 
-    // Start by getting the list of users in the space
-    this.state.teams.memberships.list({roomId: roomId}).then((memberships) => {
+    // NEW API call here
+    // The memberships.listWithReadStatus provides similar functionality
+    // to what we got with the readInfo "shim".   We call it here to
+    // Get the membership of the space along with their read status 
+    return this.state.teams.memberships.listWithReadStatus({roomId})
+    .then((memberships) => {
       // Keep a local cache of members for display purposes
-      for (let i=0; i<memberships.items.length; i++) {
-        let member = memberships.items[i]; 
+      for (const member of memberships.items) {
         // Message events have the sender ID but not name
         // Map ID to Name locally to avoid multiple SDK queries
         usersById[member.personId] = member.personDisplayName;
         users = users.concat([member.personDisplayName]);
+        lastReadById[member.personId] = member.lastSeenId ? member.lastSeenId : '';
       }
       // Now lets get the messages
       return this.state.teams.messages.list({
@@ -196,30 +222,20 @@ class Chat extends React.Component {
       }
       // We will check the last message id when we
       // process or generate read receipts  
-      lastMsgId = messageList.items[0]? messageList.items[0].id : '';
+      lastMsgId = messageList.items.length ? messageList.items[0].id : '';
 
-      // NEW API call here
-      // Get the last read status for members in the space
-      return this.state.readInfo.getSpaceInfo(roomId);
-    }).then((lastReadInfo) => {
-      if ((lastReadInfo) && (lastReadInfo.items)) {
-        // We keep track of the last read message by each user
-        for (let idx in lastReadInfo.items) {
-          let memberInfo = lastReadInfo.items[idx];
-          lastReadById[memberInfo.personId] = memberInfo.lastSeenId;
-        }
-        // If our user has an older last read we should generate a read receipt here
-        if (lastMsgId) {
-          if (lastReadById[this.state.user.id] != lastMsgId) {
-            lastReadById[this.state.user.id] = lastMsgId;
-            // NEW API
-            this.state.readInfo.sendReadReciept(this.state.user.id, lastMsgId,roomId);
-          }
-        } else {
-          lastReadById[this.state.user.id] = '';
-        }
-      } else {
-        lastReadById[this.state.user.id] = '';
+      // If our user has an older last read we should generate a read receipt
+      // since we are seeing up to the latest now...
+      if ((lastMsgId) && (lastReadById[this.state.user.id] != lastMsgId)) {
+        lastReadById[this.state.user.id] = lastMsgId;
+        // NEW API
+        // memberships.updateLastSeen replaces the readnInfo.sendReadReceipt
+        // functionality, we no longer pass in a user ID since we can only SET
+        // read receipts for "our own" user
+        this.state.teams.memberships.updateLastSeen({
+          roomId,
+          id: lastMsgId
+        });
       }
       // OK, we have everything we need to display the space, force a render
       return this.setState({
@@ -230,7 +246,10 @@ class Chat extends React.Component {
         lastReadById: lastReadById,
         roomId: roomId,
       });
-    }).then(() => this.initChat()).catch((e) => {
+    })
+    .then(() => this.initChat())
+    .then(() => this.scrollToBottom())
+    .catch((e) => {
       console.error(e.message);
       alert('Couldnt initialize space!  (Check console)');
     });
@@ -300,143 +319,51 @@ class Chat extends React.Component {
       alert('Error sending message to webex!  (Check console)');
     });
   }
-
-/**
-   * Process incoming message events sent by our eventPump 
-   * NEW API -- we registered handler when we initialized 
-   * the event pump
-   *
-   * @function processMessageEvent
-   * @param {object} message - message event payload
-   */
-  processMessageEvent(e, message) {
-    try {
-      if (e) {
-      console.error('Error processing Webex Event: '+e.message);
-      return;
-    }
-
-    switch(message.lastActivity) {
-      case('created'):
-        this.messageCreated(message.id, message.roomId);
-        break
-      case('deleted'):
-        this.messageDeleted(message);
-        break
-      default:
-        alert('Got unexpected message event activity: '+message.lastActivity);
-    }
-  } catch(e) {
-    alert('Got notified of a message event, but cannot get it: '+e.message);
-  };
-}
-
-/**
-   * Process incoming membership events sent by our eventPump 
-   * NEW API -- we registered handler when we initialized 
-   * the event pump
-   * 
-   * These events will include read receipts from other users
-   *
-   * @function processMembershipEvent
-   * @param {object} membership - membership event payload
-   */
-  processMembershipEvent(e, membership) {
-    try {
-      if (e) {
-        console.error('Error processing Webex Event: '+e.message);
-        return;
-      }
-
-    switch(membership.lastActivity) {
-      case('created'):
-        this.membershipCreated(membership);
-        break
-      case('deleted'):
-        this.membershipDeleted(membership);
-        break
-      case('updated'):
-        this.readReceipt(membership);
-        break
-      default:
-        alert('Got unexpected membership event activity: '+membership.lastActivity);
-    }
-
-  } catch(e) {
-    alert('Got notified of a membership event, but cannot get it: '+e.message);
-  };
-}
-
-/**
-   * Process incoming room events sent by our eventPump 
-   * NEW API -- we registered handler when we initialized 
-   * the event pump
-   * 
-   * This happens when our user creates a room, or another
-   * user creates one and includes us
-   * 
-   * Our GUI does not show rooms so we'll simply put up an alert
-   *
-   * @function processRoomEvent
-   * @param {object} room - room event payload
-   */
-  processRoomEvent(e, room) {
-    try {
-      if (e) {
-        console.error('Error processing Webex Event: '+e.message);
-        return;
-      }
-      this.state.teams.rooms.get(room.id).then(newRoom => {
-        alert('A new room: "'+newRoom.title+'" was created with you in it. Just FYI...');
-      }).catch(e => {
-        console.error('Error looking up title for room that got a read activity: '+e.message);
-      });
-    } catch(e) {
-      alert('Got notified of a room event, but cannot get it: '+e.message);
-    };
-  }
-
 /**
  * Process an incoming new message event
  * NEW API
  *
  * @function messageCreated
- * @param {string} msgId - id of new message
- * @param {string} roomId - id of the space the message is in 
+ * @param {object} msg - newly created message object
  */
-  messageCreated(msgId, roomId) {
-    if (roomId != this.state.roomId) {
-      //TODO
-      console.log(
-        'Ignoring message event for a room other than the current one.\n'+
-        'This type of event could be used to mark spaces as having new unread messages.'
-      );
-      return;
-    }
-    // Get the message contents and update our local message store
-    this.state.teams.messages.get(msgId).then((msg) => {
-      // If we are looking lets mark this message as read
-      if (this.state.lookingState == 'looking') {
-        this.state.lastReadById[this.state.user.id] = msg.id;
+  messageCreated(msg) {
+    try {
+      if (msg.roomId != this.state.roomId) {
+        //TODO
+        console.log(
+          'Ignoring message event for a room other than the current one.\n'+
+          'This type of event could be used to mark spaces as having new unread messages.'
+        );
+        return;
       }
-      // We also mark the sender as read
-      this.state.lastReadById[msg.personId] = msg.id;
-      return this.setState({
-        messages: this.state.messages.concat([{
-          username: this.state.usersById[msg.personId],
-          message: {
-            type: 'message',
-            text: msg.html ? msg.html : msg.text
-          },
-        }]),
-        lastMsgId: msg.id,
-        lastReadById: this.state.lastReadById
+      // Update this spaces view
+      this.setState((prevState) => {
+        // Add new msg to the list
+        let newState = ({
+          messages: prevState.messages.concat([{
+            username: prevState.usersById[msg.personId],
+            message: {
+              type: 'message',
+              text: msg.html ? msg.html : msg.text
+              // TODO Files?
+              }
+            }]),
+          lastMsgId: msg.id,
+          lastReadById: prevState.lastReadById
+        });
+        // Updated read statuses as needed
+        if (prevState.lookingState == 'looking') {
+          // If we are looking lets mark this message as read
+          newState.lastReadById[prevState.user.id] = msg.id;
+          this.state.teams.memberships.updateLastSeen(msg);
+        }
+        // We also mark the sender as caught up in our internal cache
+        newState.lastReadById[msg.personId] = msg.id;
+        return newState;
       });
-    }).then(() => {
-      this.scrollToBottom();
-    }).catch((e) => {
-      alert('Got notified of a new message, but cannot get it: '+e.message);
-    });
+    } catch (e) {
+      alert('Error processing new message: '+e.message);
+    }
   }
 
 /**
@@ -494,8 +421,15 @@ class Chat extends React.Component {
       if (membership.roomId != this.state.roomId) {
         console.log(
           'Ignoring membership deleted event for a room other than the current one.\n'+
-          'If the server is caching this type of info it could.'
+          'This type of event could be used to update the list of spaces the user is in.'
         );
+        return;
+      }
+      // We don't handle our own membership being deleted, just put up an alert
+      if (membership.personId === this.state.user.id) {
+        alert('Our user was removed from this space!  We don\'t handle this well!\n' +
+              'See if the user can be added back or unexpected errors may occur.');
+        //TODO do something better than this...
         return;
       }
       // Update the membership list and membership info
@@ -586,7 +520,7 @@ class Chat extends React.Component {
   }
 
   // React to a "Start Looking" action
-  isBack(e) {
+  async isBack(e) {
     console.log('user is back');
     if (this.state.lookingState == 'looking') {
       console.log('Already in is looking state');
@@ -604,7 +538,8 @@ class Chat extends React.Component {
     // Set the looking state to back
     // In this state we will show the new messages marker
     // if any messages came in while we were away
-    this.setState({ lookingState: 'back' });
+    await this.setState({ lookingState: 'back' });
+    this.scrollToBottom();
 
     // Notify other clients that we are caught up
     // unless no new messages have arrived since we left
@@ -612,13 +547,11 @@ class Chat extends React.Component {
         this.state.lastMsgId) 
     {
       // NEW API
-      this.state.readInfo.sendReadReciept(
-        this.state.user.id,
-        this.state.lastMsgId,
-        this.state.roomId
-      );
+      this.state.teams.memberships.updateLastSeen({
+        roomId: this.state.roomId,
+        id: this.state.lastMsgId,
+      });      
     }
-    this.scrollToBottom();
   }
 
   // Takes the new message marker out of the queue
