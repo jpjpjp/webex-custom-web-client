@@ -1,23 +1,21 @@
-# chatter-webex
+# webex-custom-web-client
 
-This project provides an example of how a developer who is building a messaging application using the Webex JS SDK could implement missing features such as Message and Membership eventing and "read receipts". 
+This project provides an example of how a developer who is building a messaging application using the Webex JS SDK could implement a custom client.  It focuses primarily on demonstrating Message and Membership eventing and "read receipts". 
 * Message and Membership events means that the SDK based app is "notified" when a new event occurs, and does not, for example, need to "poll" to see if new messages are available
 * Read Receipts means that the app can provide functionality to indicate if other users have read your message, or show which of your messages are unread
 
-**Use of this code is at your own risk!**  This sample leverages internal interfaces that Cisco does not officially support for end user developers.  What this means is that the interfaces demonstrated in this sample may change without notice from Cisco and Cisco has no responsibility to revert back to support your code.  **NO WARRANTY IS IMPLIED!**
+**Use of this code is at your own risk!**  This sample is simply a demonstration of how a developer could implement a "custom messaging client" using the webex SDK.  **NO WARRANTY IS IMPLIED!**
 
 
 ## Background
 
-In order to demonstrate how it is possible to build a messaging client that uses socket based message events and read receipts it was necessary to build a small messaging front end.   This sample is based on a [JS, Node and sockets based chat example](https://quantizd.com/build-chat-app-with-express-react-socket-io/) found on the internet.   The original intention was to demonstrate how read receipts and message events could be implemented **WITHOUT** using private interfaces by using a socket connection to a backend server that provides these functions.
+This sample was originally started by a developer with very little front end development experience and is based on a [JS, Node and sockets based chat example](https://quantizd.com/build-chat-app-with-express-react-socket-io/) found on the internet.   The original intention was to demonstrate how read receipts and message events could be implemented using features that have recently been exposed in the [webex javascript SDK](https://www.npmjs.com/package/webex).
 
-After conversations with one company's development team, this approach was altered to initially use private interfaces (not expressly supported by Cisco).   A future version of this project may include both so that developers can compare and contrast.
-
-As a result of this starting point, this sample is not a frontend-only application.  It does require starting a server which, at this point, simply serves the initial page.  All chat functionality is implemented in client side javascript leveraging the Webex JS SDK.
+As a result of this starting point, this sample is not a frontend-only application.  It does require starting a server which simply serves the initial page.  All chat functionality is implemented in client side javascript leveraging the Webex JS SDK.
 
 The functionality in this sample is focused exclusively on demonstrating event based messaging and read receipts.  To that end we have omitted chat functionality features such as login, guest user creation, webex space creation, membership management, etc.   In addition, this sample does not attempt to manage more than one space.   What it does implement is a "sign in" page where the user can choose from a pre-configured set of Webex users. Once seletected the GUI will show some details about a pre-configured space assigned to that user.  The GUI will show all the members off the space, a kludgy "read status" for each user, and a chat window where the user can read and post messages.
 
-With regards to understanding when a user has "read" the messages that are being displayed, there is some art to determining the right way to do this.  Applications may use mouse clicks, timers, window focus and a variety of methods to determine read status.  There is no cannonical "right way" to do this.  For simplicity's sake, this sample includes a "Stop Looking" and a "Start Looking" button.  When the user clicks "Stop Looking" messages will not be displayed.  When the user clicks "Start Looking", messages are displayed with a New Message indicator showing which messages arrived in the meantime.  A read receipt is sent to Webex whenever the user clicks "Start Looking" or sends a message.
+With regards to understanding when a user has "read" the messages that are being displayed, there is some art to determining the right way to do this.  Applications may use mouse clicks, timers, window focus and a variety of methods to determine read status.  There is no cannonical "right way" to do this.  For simplicity's sake, this sample includes a "Stop Looking" and a "Start Looking" button.  When the user clicks "Stop Looking" messages will not be displayed.  When the user clicks "Start Looking", messages are displayed with a New Message indicator showing which messages arrived in the meantime.  A read receipt is sent to Webex whenever the user is looking and receives a message, or when the user clicks on "Start Looking" and then sends a message.
 
 ## Getting Started
 
@@ -59,59 +57,38 @@ If the configuration file was set up properly, it should be simple to choose one
 
 ## Understanding the new functionality
 
-The heart of the client side logic resides in the Chat.js module.   In no way should this be considered a good reference for implementing a chat application!  It is useful though for understanding how a Chat application would interact with the new interfaces provided in two "shim" modules that expose the new functionality.
-
-When reading through Chat.js code look for comments that include "NEW API" to find the points where the application interacts with the new functionality.
+The heart of the client side logic resides in the Chat.js module.   While this is probably not a good reference for implementing a chat application user interface,  it is useful for understanding how a Chat application would interact with the webex sdk interfaces for discovering information about messages and member read status in a space.
 
 ## Eventing
 
-The eventing logic is encapsulated in EventPump module defined in [eventPump.js](src/components/chat/eventPump.js).  This module can be instantiated after the SDK is intialized.  Its constructor parameters are the initialized SDK and callback functions for message, membership and room events.  The callback function for message events get either an error or a message object. The callback function for membership events get either an error or a membership object. The callback function for room events get either an error or a room object.   The contstructor registers for the internal events. 
+The webex SDK now supports an event model where applications can register to "listen" to membership, message, and room events.  After our sample application initializes the SDK it calls the following functions:
 
-Once instantianted, the EventPump.processEvent function will convert internal message, membership and room events to a structure that is as similar as possible to the "data" object in the  standard message or membershp webhook payload.  There are some additional values in this object that your code can inspect:
+* messages.listen() -- once this function returns, the application may register for the following event
+  * messages.on("created") - this function is called when a new message is posted in a space our user is in
+  * messages.on("deleted") - this function is called when a message is deleted in a space our user is in
+* memberships.listen()
+  * memberships.on("created") - this function is called when a new user is added to a space we are in, or if our user is added to a new space
+  * memberships.on("deleted") - this function is called when a user, including our user, is removed from a space we are in
+  * memberships.on("updated") - this function is called when a user's membership changes.  Usually this is when their moderator status changes
+  * memberships.on("seen") - this function is called when a user in a space we are in sends a read receipt 
+* rooms.listen()
+  * rooms.on("created") - this function is called when our user creates a new space, or another user creates a space with our user in the initial set of members
+  * rooms.on("updated") - this function is called when a user modifies a space.  Usually this means the title has changed
+  
+ These events correlate with the [webhooks that are generated by the Webex platform](https://developer.webex.com/docs/api/guides/webhooks/filtering-webhooks). In general the SDK events closely match the payload of the webhooks, except in cases where the information in a traditional webhook envelope doesn't make sense, for example there is no <em>name, targetUrl</em>, or <em>secret</em> field in the SDK event envelope.
 
-* **lastActivity**: will be one of "created", "deleted" or "updated".  A value of "created" means a new message has been posted or a new user was added to a space, or a new space was created that includes the user.   A value of "deleted" means a user deleted their message or a user left or was removed from a space.  Room events will never have a "deleted" state. A value of "updated" means that some attribute of this user has changed.  This might mean that its a read receipt.  Room events will never have a "updated" state.
-* **lastActivityDate**: this is a timestamp that indicates when the last activity occured
-* **lastSeenId**: this is the message ID of the last seen message.   This field is not guaranteed to be in every payload, so code should check for it carefully.  If this field exists and the value of lastActivity is "updated" this represents a read receipt.  It is worth noting that it is possible that the ID returned in this field could point to an internal Webex "activity" that is **not** a message.   It is safe to compare this Id to existing messageIds, but application logic should not assume it is a valid messageId.
+The SDK adds one event which is not yet supported in the webhooks.  A <em>memberships:seen</em> event is generated when a Webex client sends a "read receipt".   The <em>membership:seen</em> event will include a <em>lastSeenId</em> field with the id of the last message read by the user.
 
-## Read Receipts
 
-The read receipt event described above, occurs only when a client SENDS a read receipt to the webex platform.   A third pary client will need to do this task.  To support this, additional functions for read recipts have been encapsulated in a ReadInfo module defined in [readInfo.js](src/components/chat/readInfo.js).  This module can be instantiated after the SDK is intialized.  Its constructor parameter is the same user auth token that was used to instantiate the SDK.  Once instantiated this module provides two methods for managing read receipts:
+## Tracking and setting read status for users
 
-* sendReceipt()  This function takes three parameters:
-  * personId:  -- the webex user that you are sending the read receipt for
-  * messageId: -- the last message in the space that the user has read
-  * roomId: -- the webex space where the message is
+The "read receipt" event described above, occurs only when a client SENDS a read receipt to the webex platform.   A third pary client will need to do this task.  To support this, the webex SDK now supports four additional functions to aid in discovering and generating information on read status:
 
-When called, this module will send the read receipt info to the Webex platform, which will then distribute it to all interested clients.  For example in our application, our processMembershipEvent callback will be called by the EventPump.processEvents function with a membership object that has "lastActivity" set to "updated", and "lastSeenId" to the messageId that was passed to sendReceipt().
+* [rooms.getWithReadStatus(roomID)](https://webex.github.io/webex-js-sdk/api/#roomsgetwithreadstatus) - returns details about our users read status.  The response object includes a `lastActivityDate` and a `lastSeenDate`.  If `lastActivityDate` is more recent than `lastSeenDate`, there are new messages in this space that our user has not seen yet.
+* [roomslistWithReadStatus(maxRecent)](https://webex.github.io/webex-js-sdk/api/#roomslistwithreadstatus) - returns a list of all spaces the user is in.   Each room in the list includes a `lastActivityDate` and a `lastSeenDate`.  If `lastActivityDate` is more recent than `lastSeenDate`, there are new messages in this space that our user has not seen yet.   This request does NOT support pagination and can take a long time.  It supports an optional `maxRecent` parameter, which, when set, will limit the response to up to 100 rooms that have had activity in the last two weeks.  This can be useful to quickly update the GUI after initial login.
+* [memberships.listWithReadStatus({roomId})](https://webex.github.io/webex-js-sdk/api/#membershipslistwithreadstatus) - this function returns a list with membership info for the room object (or roomId) that was passed to it.  Each membership objec tin the list includes a  `lastSeenDate`, which can be compared with the `lastActivity` attribute of the space.  It also includes a `lastSeenId` which can be compared with the most recent message ID for the space.
+* [memberships.updateLastSeen({roomId, messageId})](https://webex.github.io/webex-js-sdk/api/#updatelastseen) - this function "sends" a read receipt for our user and updates the lastSeenId for a given space to the messageID that was passed.   A message object can be passed directly to this function
 
-A chat client that can send and receive read receipts can keep its GUI up to date in real time, but when the app first starts it needs a way to get the current read receipt status for each of its members.   The other function this module provides helps with this:
-
-* getSpaceInfo()  This function has one parameter:
-  * roomId: -- the webex space to get the information for
-
-This function will return object with an array of objects.  Each object will include:
-* personId: the ID of a member of the space
-* lastSeenId: the last message that the user sent a read receipt for
-* lastSeenDate: the date of the last activity
-
-This array may **not** include lastSeen information on all members in the space.   If there is no information available on the last message that they read then no the lastSeen fields will not be included in the object.
-
-## Get room read/unread status at startup
-
-When an app with a GUI that shows the user all available rooms starts up, it is useful to understand which of the rooms have messages or activity that has occurred since the last time the user looked at them.   The readInfo module provides a function getReadStatus for this purpose.
-
-The function takes no parameters and will return an object with an item list.  Each item will contain the following elements
-   * roomId - ID of the space 
-   * lastSeenDate -- timestamp of last read receipt for user
-   * lastActivityDate -- timestamp of last activity in space
-
-An app could use this to differentiate between the list of spaces that have unread messages in them from spaces that have no unread messages.    This sample does NOT provide a GUI that does this but there is a command line test application [test-readInfo.js](.src/components/chat/test-readInfo.js) that demonstrates how an app could use this functionality.
-
-To run the test application set an environment variable WEBEX_TOKEN to a valid webex user's auth token.  Then run:
-
-`npm run test`
-
-The sample first calls the method and provides statistics on the number of read and unread rooms that the user is in.  It then registers callbacks for the events exposed in the EventPump module.  When a message updated event is received, the sample uses this to update the lastSeenDate and lastActivityDate associated with the room.  A GUI app would use similar logic to keep the read/unread status of the user's rooms up to date.
 
 ## Post Messages with File Attachments
 

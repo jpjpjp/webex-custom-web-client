@@ -1,6 +1,5 @@
 import React from 'react';
 import ChatBox from "./ChatBox";
-import GifBox from "./GifBox";
 import Message from "./Message";
 
 class Messages extends React.Component {
@@ -10,8 +9,7 @@ class Messages extends React.Component {
     this.state = {
       height: 0,
       messages: props.messages,
-      lookingState: props.lookingState,
-      gif: false,
+      lookingState: props.lookingState
     }
   }
 
@@ -67,20 +65,13 @@ class Messages extends React.Component {
             }
           </div>
         )}
-        {this.state.gif ? (
-          <GifBox
-            sendMessage={this.props.sendMessage}
-            toggleGif={this.toggleGif.bind(this)}
-          />
-        ) : (
-          <ChatBox
-            sendMessage={this.props.sendMessage}
-            goneAway={this.props.goneAway}
-            isBack={this.props.isBack}
-            toggleAway={this.toggleAway.bind(this)}
-            lookingState={this.state.lookingState}
-          />
-        )}
+        <ChatBox
+          sendMessage={this.props.sendMessage}
+          goneAway={this.props.goneAway}
+          isBack={this.props.isBack}
+          toggleAway={this.toggleAway.bind(this)}
+          lookingState={this.state.lookingState}
+        />
       </div>
     )
   }
