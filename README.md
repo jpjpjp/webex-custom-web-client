@@ -100,3 +100,7 @@ The sendFile method simply calls the SDK's native messages.create() function pas
 
 The GUI has NOT been implemented to support sending text and a file in the same message.  This is left as an exercise to the reader.
 
+## Contributing
+
+This project was inspired to support a specific customer use case, but with some additional work it could become a more generic refrence for how to build a non Cisco branded custom web client.   Check out the [To Do List](./TODO.md), if you would like to contribute.
+
