@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "a chat app using webex teams and webex sdk",
   "dependencies": {
-    "axios": "^0.18.0",
+    "axios": "^0.18.1",
     "babel-polyfill": "^6.26.0",
     "bootstrap": "^4.3.1",
     "dotenv": "^7.0.0",
